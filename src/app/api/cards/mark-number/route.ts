@@ -156,7 +156,7 @@ export async function DELETE(request: Request) {
 
   if (updates.length > 0) {
     await Promise.all(
-      updates.map((item) =>
+      updates.map((item: { id: string; markedNumbers: number[] }) =>
         prisma.bingoCard.update({
           where: { id: item.id },
           data: { markedNumbers: { set: item.markedNumbers } },
