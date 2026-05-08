@@ -44,6 +44,10 @@ export default function DashboardPage() {
   const [numberInput, setNumberInput] = useState("");
   const [markingAll, setMarkingAll] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [markedCalls, setMarkedCalls] = useState<number[]>([]);
+  const [selectedMarkedCalls, setSelectedMarkedCalls] = useState<number[]>([]);
+  const [deletingMarkedCalls, setDeletingMarkedCalls] = useState(false);
+  const [markedCallsMessage, setMarkedCallsMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void loadData();
@@ -52,7 +56,11 @@ export default function DashboardPage() {
   async function loadData() {
     setError(null);
 
-    const [meRes, cardsRes] = await Promise.all([fetch("/api/me"), fetch("/api/cards")]);
+    const [meRes, cardsRes, markedRes] = await Promise.all([
+      fetch("/api/me"),
+      fetch("/api/cards"),
+      fetch("/api/cards/mark-number"),
+    ]);
 
     if (!meRes.ok) {
       setError("Debes iniciar sesión.");
@@ -65,6 +73,13 @@ export default function DashboardPage() {
     if (cardsRes.ok) {
       const cardsPayload = (await cardsRes.json()) as { cards: Card[] };
       setCards(cardsPayload.cards);
+    }
+
+    if (markedRes.ok) {
+      const markedPayload = (await markedRes.json()) as { markedNumbers: number[] };
+      const sorted = [...(markedPayload.markedNumbers ?? [])].sort((a, b) => a - b);
+      setMarkedCalls(sorted);
+      setSelectedMarkedCalls((previous) => previous.filter((value) => sorted.includes(value)));
     }
   }
 
@@ -181,6 +196,53 @@ export default function DashboardPage() {
     }
   }
 
+  function toggleMarkedNumberSelection(number: number) {
+    setSelectedMarkedCalls((previous) =>
+      previous.includes(number)
+        ? previous.filter((value) => value !== number)
+        : [...previous, number].sort((a, b) => a - b),
+    );
+  }
+
+  async function deleteMarkedNumbers(numbers: number[]) {
+    if (numbers.length === 0) {
+      setMarkedCallsMessage("Selecciona al menos un número.");
+      return;
+    }
+
+    const label = numbers.length === 1 ? `el número ${numbers[0]}` : `${numbers.length} números seleccionados`;
+    const confirmed = window.confirm(`¿Seguro que deseas borrar ${label}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingMarkedCalls(true);
+    setMarkedCallsMessage(null);
+
+    try {
+      const response = await fetch("/api/cards/mark-number", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numbers }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setMarkedCallsMessage(payload.error ?? "No se pudieron borrar los números marcados.");
+        return;
+      }
+
+      const remaining = [...(payload.markedNumbers ?? [])].sort((a: number, b: number) => a - b);
+      setMarkedCalls(remaining);
+      setSelectedMarkedCalls((previous) => previous.filter((value) => remaining.includes(value)));
+      setMarkedCallsMessage(`Se borraron ${numbers.length} número(s) marcados.`);
+      await loadData();
+    } finally {
+      setDeletingMarkedCalls(false);
+    }
+  }
+
   if (error) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-sky-50 p-6">
@@ -230,6 +292,80 @@ export default function DashboardPage() {
               </button>
             </form>
             {bulkMessage ? <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-medium text-zinc-800">{bulkMessage}</p> : null}
+          </div>
+
+          <div className="mb-5 rounded-xl border border-sky-200 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-bold text-zinc-900">Números marcados</h3>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void deleteMarkedNumbers(selectedMarkedCalls)}
+                  disabled={deletingMarkedCalls || selectedMarkedCalls.length === 0}
+                  className="rounded-lg border border-sky-300 bg-sky-100 px-3 py-1.5 text-xs font-semibold text-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deletingMarkedCalls ? "Borrando..." : `Borrar seleccionados (${selectedMarkedCalls.length})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMarkedCalls(markedCalls)}
+                  disabled={deletingMarkedCalls || markedCalls.length === 0}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Seleccionar todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMarkedCalls([])}
+                  disabled={deletingMarkedCalls || selectedMarkedCalls.length === 0}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            {markedCalls.length === 0 ? (
+              <p className="mt-3 text-sm font-medium text-zinc-600">Aún no hay números marcados globalmente.</p>
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {markedCalls.map((value) => {
+                  const selected = selectedMarkedCalls.includes(value);
+                  return (
+                    <label
+                      key={value}
+                      className={[
+                        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold",
+                        selected ? "border-zinc-900 bg-zinc-900 text-white" : "border-sky-300 bg-sky-50 text-zinc-900",
+                      ].join(" ")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleMarkedNumberSelection(value)}
+                        className="h-4 w-4 rounded border-zinc-300"
+                      />
+                      <span>{value}</span>
+                      <button
+                        type="button"
+                        onClick={() => void deleteMarkedNumbers([value])}
+                        disabled={deletingMarkedCalls}
+                        className={[
+                          "rounded-md px-2 py-0.5 text-[11px] font-bold",
+                          selected ? "bg-white text-zinc-900" : "bg-zinc-900 text-white",
+                        ].join(" ")}
+                      >
+                        Borrar
+                      </button>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {markedCallsMessage ? (
+              <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-sm font-medium text-zinc-800">{markedCallsMessage}</p>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">

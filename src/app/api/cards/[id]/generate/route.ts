@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import type { BingoCardStatus } from "@prisma/client";
 import { createEmptyBingoGrid } from "@/lib/bingo";
 import { getCurrentUser } from "@/lib/auth";
 import { computeMarkedNumbersForGrid } from "@/lib/marked-calls";
 import { extractBingoGridFromDataUrl, type OcrCropRect } from "@/lib/ocr";
 import { prisma } from "@/lib/prisma";
+
+type GeneratedCardStatus = "PROCESSED" | "ERROR";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -111,14 +112,14 @@ export async function POST(request: Request, { params }: Params) {
 
     const normalized = results.map((result) => ({
       grid: result?.grid ?? createEmptyBingoGrid(),
-      status: (result ? "PROCESSED" : "ERROR") as BingoCardStatus,
+      status: (result ? "PROCESSED" : "ERROR") as GeneratedCardStatus,
       aiConfidence: result ? result.confidence / 100 : null,
       extractedCount: result?.extractedCount ?? 0,
     }));
 
     const first = normalized[0] ?? {
       grid: createEmptyBingoGrid(),
-      status: "ERROR" as BingoCardStatus,
+      status: "ERROR" as GeneratedCardStatus,
       aiConfidence: null,
       extractedCount: 0,
     };
