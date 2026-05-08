@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type MeResponse = {
   user: {
@@ -22,6 +22,61 @@ type Card = {
   markedNumbers: number[];
   createdAt: string;
 };
+
+type FigureMode = "custom" | "full";
+
+function createEmptyFigurePattern() {
+  return Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false));
+}
+
+function isCardCellMarked(card: Card, rowIndex: number, colIndex: number): boolean {
+  if (rowIndex === 2 && colIndex === 2) {
+    return true;
+  }
+
+  const value = card.correctedGrid?.[rowIndex]?.[colIndex] ?? null;
+  if (value === null) {
+    return false;
+  }
+
+  return card.markedNumbers.includes(value);
+}
+
+function cardMatchesFigure(card: Card, pattern: boolean[][]): boolean {
+  if (!card.correctedGrid) {
+    return false;
+  }
+
+  for (let row = 0; row < 5; row += 1) {
+    for (let col = 0; col < 5; col += 1) {
+      if (!pattern[row]?.[col]) {
+        continue;
+      }
+
+      if (!isCardCellMarked(card, row, col)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function cardIsFull(card: Card): boolean {
+  if (!card.correctedGrid) {
+    return false;
+  }
+
+  for (let row = 0; row < 5; row += 1) {
+    for (let col = 0; col < 5; col += 1) {
+      if (!isCardCellMarked(card, row, col)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
 
 function getStatusLabel(status: Card["status"]) {
   if (status === "PROCESSED") return "Procesada";
@@ -48,6 +103,27 @@ export default function DashboardPage() {
   const [selectedMarkedCalls, setSelectedMarkedCalls] = useState<number[]>([]);
   const [deletingMarkedCalls, setDeletingMarkedCalls] = useState(false);
   const [markedCallsMessage, setMarkedCallsMessage] = useState<string | null>(null);
+  const [figureMode, setFigureMode] = useState<FigureMode>("custom");
+  const [figurePattern, setFigurePattern] = useState<boolean[][]>(() => createEmptyFigurePattern());
+
+  const selectedFigureCells = useMemo(
+    () => figurePattern.reduce((sum, row) => sum + row.filter((value) => value).length, 0),
+    [figurePattern],
+  );
+
+  const matchingCards = useMemo(() => {
+    if (figureMode === "full") {
+      return cards.filter((card) => cardIsFull(card));
+    }
+
+    if (selectedFigureCells === 0) {
+      return [] as Card[];
+    }
+
+    return cards.filter((card) => cardMatchesFigure(card, figurePattern));
+  }, [cards, figureMode, figurePattern, selectedFigureCells]);
+
+  const matchingCardIds = useMemo(() => new Set(matchingCards.map((card) => card.id)), [matchingCards]);
 
   useEffect(() => {
     void loadData();
@@ -243,6 +319,18 @@ export default function DashboardPage() {
     }
   }
 
+  function toggleFigureCell(rowIndex: number, colIndex: number) {
+    setFigurePattern((previous) => {
+      const next = previous.map((row) => [...row]);
+      next[rowIndex][colIndex] = !next[rowIndex][colIndex];
+      return next;
+    });
+  }
+
+  function clearFigurePattern() {
+    setFigurePattern(createEmptyFigurePattern());
+  }
+
   if (error) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-sky-50 p-6">
@@ -368,6 +456,97 @@ export default function DashboardPage() {
             ) : null}
           </div>
 
+          <div className="mb-5 rounded-xl border border-sky-200 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-bold text-zinc-900">Figura de bingo</h3>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFigureMode("custom")}
+                  className={[
+                    "rounded-lg px-3 py-1.5 text-xs font-semibold",
+                    figureMode === "custom" ? "bg-zinc-900 text-white" : "border border-zinc-300 bg-white text-zinc-800",
+                  ].join(" ")}
+                >
+                  Figura personalizada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFigureMode("full")}
+                  className={[
+                    "rounded-lg px-3 py-1.5 text-xs font-semibold",
+                    figureMode === "full" ? "bg-zinc-900 text-white" : "border border-zinc-300 bg-white text-zinc-800",
+                  ].join(" ")}
+                >
+                  Cartón lleno
+                </button>
+              </div>
+            </div>
+
+            {figureMode === "custom" ? (
+              <>
+                <p className="mt-2 text-sm font-medium text-zinc-700">Marca las celdas que definen la figura ganadora.</p>
+                <div className="mt-3 inline-grid grid-cols-5 gap-1 rounded-lg border border-sky-200 bg-sky-50 p-2">
+                  {figurePattern.flatMap((row, rowIndex) =>
+                    row.map((isSelected, colIndex) => {
+                      const isCenter = rowIndex === 2 && colIndex === 2;
+                      return (
+                        <button
+                          key={`figure-${rowIndex}-${colIndex}`}
+                          type="button"
+                          onClick={() => toggleFigureCell(rowIndex, colIndex)}
+                          className={[
+                            "flex h-8 w-8 items-center justify-center rounded text-xs font-bold transition",
+                            isCenter
+                              ? "border border-zinc-900 bg-zinc-900 text-white"
+                              : isSelected
+                                ? "bg-sky-300 text-zinc-900"
+                                : "border border-zinc-300 bg-white text-zinc-700",
+                          ].join(" ")}
+                        >
+                          {isCenter ? "F" : isSelected ? "X" : "-"}
+                        </button>
+                      );
+                    }),
+                  )}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearFigurePattern}
+                    className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800"
+                  >
+                    Limpiar figura
+                  </button>
+                  <span className="text-xs font-semibold text-zinc-700">Celdas marcadas: {selectedFigureCells}</span>
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-sm font-medium text-zinc-700">Se validan todas las celdas del cartón (incluyendo centro libre).</p>
+            )}
+
+            <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
+              {figureMode === "custom" && selectedFigureCells === 0 ? (
+                <p className="text-sm font-medium text-zinc-700">Selecciona al menos una celda para evaluar la figura.</p>
+              ) : matchingCards.length === 0 ? (
+                <p className="text-sm font-medium text-zinc-700">Aún no hay cartones que cumplan la condición.</p>
+              ) : (
+                <div>
+                  <p className="text-sm font-bold text-zinc-900">
+                    {figureMode === "full" ? "Cartón lleno" : "Figura completa"}: {matchingCards.length} cartón(es)
+                  </p>
+                  <ul className="mt-2 flex flex-wrap gap-2">
+                    {matchingCards.map((card) => (
+                      <li key={`winner-${card.id}`} className="rounded-full border border-zinc-900 bg-zinc-900 px-3 py-1 text-xs font-semibold text-white">
+                        {card.name ?? card.id.slice(0, 8)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-2xl font-black text-zinc-900">Tus cartas</h2>
             {cards.length > 0 ? (
@@ -387,10 +566,18 @@ export default function DashboardPage() {
               {cards.map((card) => (
                 <li
                   key={card.id}
-                  className="flex flex-col items-center rounded-2xl border border-sky-200 bg-gradient-to-b from-white to-sky-50 p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className={[
+                    "flex flex-col items-center rounded-2xl border bg-gradient-to-b from-white to-sky-50 p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
+                    matchingCardIds.has(card.id) ? "border-zinc-900 ring-2 ring-zinc-900/20" : "border-sky-200",
+                  ].join(" ")}
                 >
                   <p className="text-base font-black text-zinc-900">{card.name ?? "Sin nombre"}</p>
                   <p className="mt-1 text-xs font-medium text-zinc-500">ID: {card.id.slice(0, 10)}...</p>
+                  {matchingCardIds.has(card.id) ? (
+                    <span className="mt-2 rounded-full bg-zinc-900 px-2.5 py-1 text-[11px] font-bold text-white">
+                      {figureMode === "full" ? "Cartón lleno" : "Figura completa"}
+                    </span>
+                  ) : null}
                   <div className="mt-3 inline-flex items-center gap-2">
                     <span className="text-sm font-semibold text-zinc-700">Estado</span>
                     <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusClassName(card.status)}`}>
