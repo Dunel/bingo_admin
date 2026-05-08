@@ -3,6 +3,17 @@ import { hasNumber, type BingoGrid } from "@/lib/bingo";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type CardForMark = {
+  id: string;
+  correctedGrid: unknown;
+  markedNumbers: number[];
+};
+
+type CardForUnmark = {
+  id: string;
+  markedNumbers: number[];
+};
+
 function parseValidNumbers(input: unknown): number[] {
   const asArray = Array.isArray(input) ? input : [input];
   const valid = asArray
@@ -66,7 +77,7 @@ export async function POST(request: Request) {
     },
   });
 
-  const toUpdate = cards.filter((card) => {
+  const toUpdate = cards.filter((card: CardForMark) => {
     const grid = card.correctedGrid as BingoGrid | null;
     if (!grid) {
       return false;
@@ -77,7 +88,7 @@ export async function POST(request: Request) {
 
   if (toUpdate.length > 0) {
     await Promise.all(
-      toUpdate.map((card) =>
+      toUpdate.map((card: CardForMark) =>
         prisma.bingoCard.update({
           where: { id: card.id },
           data: {
@@ -95,7 +106,7 @@ export async function POST(request: Request) {
     number,
     updatedCount: toUpdate.length,
     totalCards: cards.length,
-    updatedCardIds: toUpdate.map((card) => card.id),
+    updatedCardIds: toUpdate.map((card: CardForMark) => card.id),
   });
 }
 
@@ -136,7 +147,7 @@ export async function DELETE(request: Request) {
   });
 
   const updates = cards
-    .map((card) => {
+    .map((card: CardForUnmark) => {
       const filtered = card.markedNumbers.filter((value) => !numbers.includes(value));
       const changed = filtered.length !== card.markedNumbers.length;
       return changed ? { id: card.id, markedNumbers: filtered } : null;
