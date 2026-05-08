@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum ImageMimeType {
+  IMAGE_JPG
+  IMAGE_JPEG
+  IMAGE_PNG
+}
+
+enum BingoCardStatus {
+  UPLOADED
+  PROCESSED
+  ERROR
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  username     String?     @unique
+  passwordHash String
+  role         UserRole    @default(USER)
+  isActive     Boolean     @default(true)
+  cards        BingoCard[]
+  markedCalls  UserMarkedCall[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model UserMarkedCall {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  number    Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, number])
+  @@index([userId])
+}
+
+model BingoCard {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String?
+  sourceImageUrl String
+  sourceMimeType ImageMimeType
+  status         BingoCardStatus @default(UPLOADED)
+  detectedGrid   Json?
+  correctedGrid  Json?
+  markedNumbers  Int[]           @default([])
+  aiConfidence   Float?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
