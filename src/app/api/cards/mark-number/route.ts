@@ -152,7 +152,7 @@ export async function DELETE(request: Request) {
       const changed = filtered.length !== card.markedNumbers.length;
       return changed ? { id: card.id, markedNumbers: filtered } : null;
     })
-    .filter((item): item is { id: string; markedNumbers: number[] } => item !== null);
+    .filter((item: { id: string; markedNumbers: number[] } | null): item is { id: string; markedNumbers: number[] } => item !== null);
 
   if (updates.length > 0) {
     await Promise.all(
