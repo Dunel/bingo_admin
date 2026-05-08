@@ -78,7 +78,7 @@ export async function POST(request: Request, { params }: Params) {
     select: { number: true },
     orderBy: { createdAt: "asc" },
   });
-  const globalMarkedNumbers = globalMarked.map((item) => item.number);
+  const globalMarkedNumbers = globalMarked.map((item: { number: number }) => item.number);
 
   let body: GenerateBody = {};
   try {

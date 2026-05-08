@@ -25,7 +25,7 @@ export async function GET() {
     select: { number: true },
   });
 
-  return NextResponse.json({ markedNumbers: calls.map((item) => item.number) });
+  return NextResponse.json({ markedNumbers: calls.map((item: { number: number }) => item.number) });
 }
 
 export async function POST(request: Request) {
@@ -165,6 +165,6 @@ export async function DELETE(request: Request) {
     removedNumbers: numbers,
     removedCount: deletedCalls.count,
     updatedCardsCount: updates.length,
-    markedNumbers: remainingCalls.map((item) => item.number),
+    markedNumbers: remainingCalls.map((item: { number: number }) => item.number),
   });
 }
