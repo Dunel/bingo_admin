@@ -1,20 +1,33 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { registerBodySchema } from "@/lib/validations/auth";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const email = String(body?.email ?? "").trim().toLowerCase();
-    const username = String(body?.username ?? "").trim() || null;
-    const password = String(body?.password ?? "");
+    const currentUser = await getCurrentUser();
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email y contraseña son obligatorios." }, { status: 400 });
+    if (!currentUser) {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: "La contraseña debe tener al menos 6 caracteres." }, { status: 400 });
+    if (currentUser.role !== "ADMIN") {
+      return NextResponse.json({ error: "Solo un administrador puede registrar usuarios." }, { status: 403 });
     }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Debes enviar un cuerpo JSON válido." }, { status: 400 });
+    }
+
+    const parsed = registerBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
+    }
+
+    const { email, username, password } = parsed.data;
 
     const existing = await prisma.user.findFirst({
       where: {

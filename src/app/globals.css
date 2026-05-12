@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #eef6ff;
-  --foreground: #0f172a;
+  --background: #f7f6f3;
+  --foreground: #1f1f1b;
 }
 
 html.dark {
-  --background: #0b1220;
-  --foreground: #e5edf9;
+  --background: #121212;
+  --foreground: #ebe9e2;
 }
 
 @theme inline {
@@ -24,39 +24,103 @@ body {
 }
 
 html.dark .bg-sky-50 {
-  background-color: #0f1a2e;
+  background-color: #1b2522;
 }
 
 html.dark .bg-sky-100 {
-  background-color: #13203a;
+  background-color: #22302c;
+}
+
+html.dark .bg-sky-200 {
+  background-color: #2b3d37;
+}
+
+html.dark .bg-sky-300 {
+  background-color: #375249;
+}
+
+html.dark .bg-sky-400 {
+  background-color: #4a7164;
+}
+
+html.dark .bg-sky-500 {
+  background-color: #5a8d7d;
 }
 
 html.dark .bg-white {
-  background-color: #111827;
+  background-color: #1b1b19;
+}
+
+html.dark .bg-white\/95 {
+  background-color: rgb(27 27 25 / 0.95);
+}
+
+html.dark .bg-zinc-100 {
+  background-color: #232320;
 }
 
 html.dark .text-zinc-900 {
-  color: #e5edf9;
+  color: #f4f3ee;
 }
 
 html.dark .text-zinc-800,
 html.dark .text-zinc-700,
 html.dark .text-zinc-600,
 html.dark .text-zinc-500 {
-  color: #c4d2e6;
+  color: #d4d1c8;
 }
 
+html.dark .text-zinc-300 {
+  color: #b8b4aa;
+}
+
+html.dark .text-sky-700 {
+  color: #9ed8c1;
+}
+
+html.dark .text-sky-600 {
+  color: #8dcaaf;
+}
+
+html.dark .border-sky-100,
 html.dark .border-sky-200,
 html.dark .border-sky-300,
+html.dark .border-sky-400,
+html.dark .border-sky-500,
+html.dark .border-zinc-200,
 html.dark .border-zinc-300,
 html.dark .border-zinc-500 {
-  border-color: #334155;
+  border-color: #3d4742;
+}
+
+html.dark .ring-sky-300 {
+  --tw-ring-color: #5d8578;
+}
+
+html.dark .bg-sky-500\/15 {
+  background-color: rgb(90 141 125 / 0.15);
+}
+
+html.dark .bg-sky-500\/10 {
+  background-color: rgb(90 141 125 / 0.1);
+}
+
+html.dark .bg-sky-400\/20 {
+  background-color: rgb(74 113 100 / 0.2);
+}
+
+html.dark .hover\:bg-sky-200:hover {
+  background-color: #3c574f;
+}
+
+html.dark .hover\:text-sky-600:hover {
+  color: #9ed8c1;
 }
 
 html.dark .from-white {
-  --tw-gradient-from: #111827 var(--tw-gradient-from-position);
+  --tw-gradient-from: #1b1b19 var(--tw-gradient-from-position);
 }
 
 html.dark .to-sky-50 {
-  --tw-gradient-to: #0f1a2e var(--tw-gradient-to-position);
+  --tw-gradient-to: #1b2522 var(--tw-gradient-to-position);
 }

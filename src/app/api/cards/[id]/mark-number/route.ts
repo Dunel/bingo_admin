@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { hasNumber, type BingoGrid } from "@/lib/bingo";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { markNumberBodySchema } from "@/lib/validations/cards";
+import { idParamSchema } from "@/lib/validations/common";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -14,14 +16,25 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { id } = await params;
-
-  const body = await request.json();
-  const number = Number(body?.number);
-
-  if (!Number.isInteger(number) || number < 1 || number > 75) {
-    return NextResponse.json({ error: "Número inválido. Debe estar entre 1 y 75." }, { status: 400 });
+  const parsedParams = idParamSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: parsedParams.error.issues[0]?.message ?? "ID inválido." }, { status: 400 });
   }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Debes enviar un cuerpo JSON válido." }, { status: 400 });
+  }
+
+  const parsedBody = markNumberBodySchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: parsedBody.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
+  }
+
+  const { id } = parsedParams.data;
+  const { number } = parsedBody.data;
 
   const card = await prisma.bingoCard.findFirst({
     where: { id, userId: user.id },

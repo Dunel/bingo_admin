@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hasNumber, type BingoGrid } from "@/lib/bingo";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { deleteMarkedNumbersBodySchema, markNumberBodySchema } from "@/lib/validations/cards";
 
 type CardForMark = {
   id: string;
@@ -13,15 +14,6 @@ type CardForUnmark = {
   id: string;
   markedNumbers: number[];
 };
-
-function parseValidNumbers(input: unknown): number[] {
-  const asArray = Array.isArray(input) ? input : [input];
-  const valid = asArray
-    .map((value) => Number(value))
-    .filter((value) => Number.isInteger(value) && value >= 1 && value <= 75);
-
-  return [...new Set(valid)].sort((a, b) => a - b);
-}
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -46,12 +38,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const body = await request.json();
-  const number = Number(body?.number);
-
-  if (!Number.isInteger(number) || number < 1 || number > 75) {
-    return NextResponse.json({ error: "Número inválido. Debe estar entre 1 y 75." }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Debes enviar un cuerpo JSON válido." }, { status: 400 });
   }
+
+  const parsed = markNumberBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
+  }
+
+  const { number } = parsed.data;
 
   await prisma.userMarkedCall.upsert({
     where: {
@@ -124,12 +123,12 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Debes enviar un cuerpo JSON válido." }, { status: 400 });
   }
 
-  const payload = body as { number?: unknown; numbers?: unknown };
-  const numbers = parseValidNumbers(payload.numbers ?? payload.number);
-
-  if (numbers.length === 0) {
-    return NextResponse.json({ error: "Debes enviar al menos un número válido entre 1 y 75." }, { status: 400 });
+  const parsed = deleteMarkedNumbersBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
   }
+
+  const { numbers } = parsed.data;
 
   const deletedCalls = await prisma.userMarkedCall.deleteMany({
     where: {

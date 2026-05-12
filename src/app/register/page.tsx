@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type MeResponse = {
+  user: {
+    role: "ADMIN" | "USER";
+  };
+};
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -11,9 +17,50 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function validateAccess() {
+      try {
+        const response = await fetch("/api/me");
+
+        if (!response.ok) {
+          router.replace("/login");
+          return;
+        }
+
+        const payload = (await response.json()) as MeResponse;
+        if (payload.user.role !== "ADMIN") {
+          router.replace("/dashboard");
+          return;
+        }
+
+        if (!cancelled) {
+          setIsAdmin(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingAccess(false);
+        }
+      }
+    }
+
+    void validateAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isAdmin) {
+      setError("Solo administradores pueden registrar usuarios.");
+      return;
+    }
     setError(null);
     setLoading(true);
 
@@ -37,8 +84,22 @@ export default function RegisterPage() {
     }
   }
 
+  if (checkingAccess) {
+    return (
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe_0%,_#eff6ff_45%,_#ffffff_100%)] p-6 text-zinc-900 dark:bg-[radial-gradient(circle_at_top_left,_#1f2a26_0%,_#171a18_45%,_#121212_100%)]">
+        <section className="mx-auto mt-10 w-full max-w-md rounded-3xl border border-sky-100 bg-white/95 p-8 text-center shadow-xl backdrop-blur">
+          <p className="text-sm font-semibold text-zinc-700">Validando permisos...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe_0%,_#eff6ff_45%,_#ffffff_100%)] p-6 text-zinc-900">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe_0%,_#eff6ff_45%,_#ffffff_100%)] p-6 text-zinc-900 dark:bg-[radial-gradient(circle_at_top_left,_#1f2a26_0%,_#171a18_45%,_#121212_100%)]">
       <section className="mx-auto mt-10 w-full max-w-md rounded-3xl border border-sky-100 bg-white/95 p-8 shadow-xl backdrop-blur">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-700">Bingo Admin</p>
         <h1 className="mt-3 text-3xl font-black tracking-tight">Crear cuenta</h1>

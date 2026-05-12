@@ -4,28 +4,14 @@ import { getCurrentUser } from "@/lib/auth";
 import { computeMarkedNumbersForGrid } from "@/lib/marked-calls";
 import { extractBingoGridFromDataUrl, type OcrCropRect } from "@/lib/ocr";
 import { prisma } from "@/lib/prisma";
+import { generateBodySchema } from "@/lib/validations/cards";
+import { idParamSchema } from "@/lib/validations/common";
 
 type GeneratedCardStatus = "PROCESSED" | "ERROR";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
-
-type GenerateBody = {
-  cropRect?: OcrCropRect;
-  cropRects?: OcrCropRect[];
-  mode?: "single" | "x4";
-};
-
-function isValidCropRect(value: unknown): value is OcrCropRect {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const rect = value as Record<string, unknown>;
-  const keys = ["x", "y", "width", "height"] as const;
-  return keys.every((key) => typeof rect[key] === "number" && Number.isFinite(rect[key] as number));
-}
 
 function splitIntoX4CropRects(base: OcrCropRect): OcrCropRect[] {
   // Divide exactamente en 2x2; un pequeño inset evita bordes gruesos de separación.
@@ -56,7 +42,12 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { id } = await params;
+  const parsedParams = idParamSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: parsedParams.error.issues[0]?.message ?? "ID inválido." }, { status: 400 });
+  }
+
+  const { id } = parsedParams.data;
 
   const card = await prisma.bingoCard.findFirst({
     where: { id, userId: user.id },
@@ -80,27 +71,27 @@ export async function POST(request: Request, { params }: Params) {
   });
   const globalMarkedNumbers = globalMarked.map((item: { number: number }) => item.number);
 
-  let body: GenerateBody = {};
+  let body: unknown = {};
   try {
-    body = (await request.json()) as GenerateBody;
+    body = await request.json();
   } catch {
     body = {};
   }
 
-  const cropRect = isValidCropRect(body.cropRect) ? body.cropRect : undefined;
-  const mode = body.mode === "x4" ? "x4" : "single";
+  const parsedBody = generateBodySchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: parsedBody.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
+  }
+
+  const payload = parsedBody.data;
+
+  const cropRect = payload.cropRect;
+  const mode = payload.mode === "x4" ? "x4" : "single";
 
   if (mode === "x4") {
-    const explicitRects = Array.isArray(body.cropRects)
-      ? body.cropRects.filter((value): value is OcrCropRect => isValidCropRect(value)).slice(0, 4)
+    const explicitRects = Array.isArray(payload.cropRects)
+      ? payload.cropRects.slice(0, 4)
       : [];
-
-    if (Array.isArray(body.cropRects) && explicitRects.length !== 4) {
-      return NextResponse.json(
-        { error: "En modo x4 debes enviar 4 rectángulos válidos." },
-        { status: 400 },
-      );
-    }
 
     const base = cropRect ?? { x: 0, y: 0, width: 1, height: 1 };
     const quadrants = explicitRects.length === 4 ? explicitRects : splitIntoX4CropRects(base);

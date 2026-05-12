@@ -1,16 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sessionCookieName } from "@/lib/auth";
+import { loginBodySchema } from "@/lib/validations/auth";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const email = String(body?.email ?? "").trim().toLowerCase();
-    const password = String(body?.password ?? "");
-
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email y contraseña son obligatorios." }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Debes enviar un cuerpo JSON válido." }, { status: 400 });
     }
+
+    const parsed = loginBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos." }, { status: 400 });
+    }
+
+    const { email, password } = parsed.data;
 
     const user = await prisma.user.findUnique({
       where: { email },

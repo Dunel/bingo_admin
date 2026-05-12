@@ -24,9 +24,26 @@ type Card = {
 };
 
 type FigureMode = "custom" | "full";
+type SavedFigure = {
+  id: string;
+  name: string;
+  pattern: boolean[][];
+};
 
 function createEmptyFigurePattern() {
   return Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false));
+}
+
+function clonePattern(pattern: boolean[][]): boolean[][] {
+  return pattern.map((row) => [...row]);
+}
+
+function countPatternCells(pattern: boolean[][]): number {
+  return pattern.reduce((sum, row) => sum + row.filter((value) => value).length, 0);
+}
+
+function patternKey(pattern: boolean[][]): string {
+  return pattern.map((row) => row.map((value) => (value ? "1" : "0")).join("")).join("|");
 }
 
 function isCardCellMarked(card: Card, rowIndex: number, colIndex: number): boolean {
@@ -60,6 +77,10 @@ function cardMatchesFigure(card: Card, pattern: boolean[][]): boolean {
   }
 
   return true;
+}
+
+function cardMatchesAnyFigure(card: Card, patterns: boolean[][][]): boolean {
+  return patterns.some((pattern) => cardMatchesFigure(card, pattern));
 }
 
 function cardIsFull(card: Card): boolean {
@@ -105,23 +126,48 @@ export default function DashboardPage() {
   const [markedCallsMessage, setMarkedCallsMessage] = useState<string | null>(null);
   const [figureMode, setFigureMode] = useState<FigureMode>("custom");
   const [figurePattern, setFigurePattern] = useState<boolean[][]>(() => createEmptyFigurePattern());
+  const [savedFigures, setSavedFigures] = useState<SavedFigure[]>([]);
+  const [selectedFigureIds, setSelectedFigureIds] = useState<string[]>([]);
 
-  const selectedFigureCells = useMemo(
+  const currentFigureCells = useMemo(
     () => figurePattern.reduce((sum, row) => sum + row.filter((value) => value).length, 0),
     [figurePattern],
   );
+
+  const selectedFigureIdSet = useMemo(() => new Set(selectedFigureIds), [selectedFigureIds]);
+
+  const activeFigurePatterns = useMemo(
+    () => savedFigures.filter((figure) => selectedFigureIdSet.has(figure.id)).map((figure) => figure.pattern),
+    [savedFigures, selectedFigureIdSet],
+  );
+
+  const activeFigureCellSet = useMemo(() => {
+    const cellSet = new Set<string>();
+
+    for (const pattern of activeFigurePatterns) {
+      for (let row = 0; row < 5; row += 1) {
+        for (let col = 0; col < 5; col += 1) {
+          if (pattern[row]?.[col]) {
+            cellSet.add(`${row}-${col}`);
+          }
+        }
+      }
+    }
+
+    return cellSet;
+  }, [activeFigurePatterns]);
 
   const matchingCards = useMemo(() => {
     if (figureMode === "full") {
       return cards.filter((card) => cardIsFull(card));
     }
 
-    if (selectedFigureCells === 0) {
+    if (activeFigurePatterns.length === 0) {
       return [] as Card[];
     }
 
-    return cards.filter((card) => cardMatchesFigure(card, figurePattern));
-  }, [cards, figureMode, figurePattern, selectedFigureCells]);
+    return cards.filter((card) => cardMatchesAnyFigure(card, activeFigurePatterns));
+  }, [cards, figureMode, activeFigurePatterns]);
 
   const matchingCardIds = useMemo(() => new Set(matchingCards.map((card) => card.id)), [matchingCards]);
 
@@ -331,6 +377,38 @@ export default function DashboardPage() {
     setFigurePattern(createEmptyFigurePattern());
   }
 
+  function addCurrentFigure() {
+    if (currentFigureCells === 0) {
+      return;
+    }
+
+    const nextPattern = clonePattern(figurePattern);
+    const key = patternKey(nextPattern);
+
+    const duplicate = savedFigures.some((figure) => patternKey(figure.pattern) === key);
+    if (duplicate) {
+      return;
+    }
+
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const name = `Figura ${savedFigures.length + 1}`;
+
+    setSavedFigures((previous) => [...previous, { id, name, pattern: nextPattern }]);
+    setSelectedFigureIds((previous) => [...previous, id]);
+    setFigurePattern(createEmptyFigurePattern());
+  }
+
+  function toggleFigureSelection(figureId: string) {
+    setSelectedFigureIds((previous) =>
+      previous.includes(figureId) ? previous.filter((id) => id !== figureId) : [...previous, figureId],
+    );
+  }
+
+  function removeFigure(figureId: string) {
+    setSavedFigures((previous) => previous.filter((figure) => figure.id !== figureId));
+    setSelectedFigureIds((previous) => previous.filter((id) => id !== figureId));
+  }
+
   if (error) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-sky-50 p-6">
@@ -352,6 +430,11 @@ export default function DashboardPage() {
             <Link href="/cards/new" className="rounded-lg bg-sky-300 px-4 py-2 font-semibold text-zinc-900">
               Nueva carta
             </Link>
+            {me?.user.role === "ADMIN" ? (
+              <Link href="/register" className="rounded-lg border border-sky-300 bg-sky-100 px-4 py-2 font-semibold text-zinc-900">
+                Registrar usuario
+              </Link>
+            ) : null}
             <button onClick={logout} className="rounded-lg border border-zinc-500 px-4 py-2">
               Salir
             </button>
@@ -485,7 +568,7 @@ export default function DashboardPage() {
 
             {figureMode === "custom" ? (
               <>
-                <p className="mt-2 text-sm font-medium text-zinc-700">Marca las celdas que definen la figura ganadora.</p>
+                <p className="mt-2 text-sm font-medium text-zinc-700">Dibuja una figura y agrégala. Puedes guardar y combinar varias figuras.</p>
                 <div className="mt-3 inline-grid grid-cols-5 gap-1 rounded-lg border border-sky-200 bg-sky-50 p-2">
                   {figurePattern.flatMap((row, rowIndex) =>
                     row.map((isSelected, colIndex) => {
@@ -513,12 +596,70 @@ export default function DashboardPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
+                    onClick={addCurrentFigure}
+                    disabled={currentFigureCells === 0}
+                    className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Agregar figura
+                  </button>
+                  <button
+                    type="button"
                     onClick={clearFigurePattern}
                     className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800"
                   >
-                    Limpiar figura
+                    Limpiar dibujo
                   </button>
-                  <span className="text-xs font-semibold text-zinc-700">Celdas marcadas: {selectedFigureCells}</span>
+                  <span className="text-xs font-semibold text-zinc-700">Celdas en dibujo: {currentFigureCells}</span>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-sky-200 bg-white p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-zinc-700">Figuras guardadas</p>
+                  {savedFigures.length === 0 ? (
+                    <p className="mt-2 text-sm font-medium text-zinc-600">Aún no hay figuras guardadas.</p>
+                  ) : (
+                    <ul className="mt-2 flex flex-wrap gap-2">
+                      {savedFigures.map((figure) => {
+                        const selected = selectedFigureIdSet.has(figure.id);
+                        return (
+                          <li key={figure.id} className="inline-flex items-center gap-2 rounded-xl border border-sky-300 bg-sky-50 px-2.5 py-1.5">
+                            <div className="inline-grid grid-cols-5 gap-[2px] rounded border border-sky-200 bg-white p-1" aria-hidden="true">
+                              {figure.pattern.flatMap((row, rowIndex) =>
+                                row.map((isFilled, colIndex) => {
+                                  const isCenter = rowIndex === 2 && colIndex === 2;
+                                  const active = isCenter || isFilled;
+                                  return (
+                                    <span
+                                      key={`thumb-${figure.id}-${rowIndex}-${colIndex}`}
+                                      className={[
+                                        "h-2 w-2 rounded-[2px] border",
+                                        active ? "border-sky-500 bg-sky-400" : "border-zinc-300 bg-white",
+                                      ].join(" ")}
+                                    />
+                                  );
+                                }),
+                              )}
+                            </div>
+                            <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-zinc-900">
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleFigureSelection(figure.id)}
+                                className="h-3.5 w-3.5 rounded border-zinc-300"
+                              />
+                              <span>{figure.name} ({countPatternCells(figure.pattern)})</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => removeFigure(figure.id)}
+                              className="rounded-md bg-zinc-900 px-2 py-0.5 text-[11px] font-bold text-white"
+                            >
+                              X
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               </>
             ) : (
@@ -526,8 +667,8 @@ export default function DashboardPage() {
             )}
 
             <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
-              {figureMode === "custom" && selectedFigureCells === 0 ? (
-                <p className="text-sm font-medium text-zinc-700">Selecciona al menos una celda para evaluar la figura.</p>
+              {figureMode === "custom" && selectedFigureIds.length === 0 ? (
+                <p className="text-sm font-medium text-zinc-700">Selecciona al menos una figura guardada para evaluar.</p>
               ) : matchingCards.length === 0 ? (
                 <p className="text-sm font-medium text-zinc-700">Aún no hay cartones que cumplan la condición.</p>
               ) : (
@@ -591,17 +732,26 @@ export default function DashboardPage() {
                         {card.correctedGrid.flatMap((row, rowIndex) =>
                           row.map((value, colIndex) => {
                             const isCenterFree = rowIndex === 2 && colIndex === 2;
-                            const isMarked = value !== null && card.markedNumbers.includes(value);
+                            const figureFilterActive = figureMode === "custom" && selectedFigureIds.length > 0;
+                            const isFigureCell = figureFilterActive ? activeFigureCellSet.has(`${rowIndex}-${colIndex}`) : true;
+                            const isMarked = isCardCellMarked(card, rowIndex, colIndex);
+                            const isHighlighted = isFigureCell && isMarked;
                             return (
                               <div
                                 key={`${card.id}-${rowIndex}-${colIndex}`}
                                 className={[
-                                  "flex h-6 w-6 items-center justify-center rounded text-[10px] font-semibold",
+                                  "relative flex h-6 w-6 items-center justify-center rounded text-[10px]",
                                   isCenterFree ? "border border-zinc-300 bg-zinc-100 text-zinc-600" : "",
-                                  isMarked ? "bg-zinc-900 text-white" : "",
-                                  !isMarked && !isCenterFree ? "border border-zinc-300 bg-white text-zinc-700" : "",
+                                  isHighlighted ? "border-2 border-sky-500 bg-sky-300 font-black text-zinc-950 shadow" : "",
+                                  figureFilterActive && !isFigureCell ? "border border-zinc-200 bg-zinc-50 text-zinc-400" : "",
+                                  !isHighlighted && (!figureFilterActive || isFigureCell) && !isCenterFree
+                                    ? "border border-zinc-300 bg-white font-semibold text-zinc-700"
+                                    : "",
                                 ].join(" ")}
                               >
+                                {isHighlighted && !isCenterFree ? (
+                                  <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-zinc-900" aria-hidden="true" />
+                                ) : null}
                                 {isCenterFree ? "F" : value ?? "-"}
                               </div>
                             );

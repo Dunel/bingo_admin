@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -38,7 +37,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe_0%,_#eff6ff_45%,_#ffffff_100%)] p-6 text-zinc-900">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeafe_0%,_#eff6ff_45%,_#ffffff_100%)] p-6 text-zinc-900 dark:bg-[radial-gradient(circle_at_top_left,_#1f2a26_0%,_#171a18_45%,_#121212_100%)]">
       <section className="mx-auto mt-10 w-full max-w-md rounded-3xl border border-sky-100 bg-white/95 p-8 shadow-xl backdrop-blur">
         <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-700">Bingo Admin</p>
         <h1 className="mt-3 text-3xl font-black tracking-tight">Iniciar sesión</h1>
@@ -79,12 +78,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-sm text-zinc-700">
-          ¿No tienes cuenta?{" "}
-          <Link href="/register" className="font-semibold text-sky-700 hover:text-sky-600">
-            Regístrate
-          </Link>
-        </p>
+        <p className="mt-6 text-sm text-zinc-700">La creación de cuentas está disponible solo desde la administración.</p>
       </section>
     </main>
   );

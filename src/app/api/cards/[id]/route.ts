@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { idParamSchema } from "@/lib/validations/common";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -13,7 +14,12 @@ export async function GET(_: Request, { params }: Params) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { id } = await params;
+  const parsedParams = idParamSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: parsedParams.error.issues[0]?.message ?? "ID inválido." }, { status: 400 });
+  }
+
+  const { id } = parsedParams.data;
 
   const card = await prisma.bingoCard.findFirst({
     where: { id, userId: user.id },
@@ -44,7 +50,12 @@ export async function DELETE(_: Request, { params }: Params) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { id } = await params;
+  const parsedParams = idParamSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: parsedParams.error.issues[0]?.message ?? "ID inválido." }, { status: 400 });
+  }
+
+  const { id } = parsedParams.data;
 
   const card = await prisma.bingoCard.findFirst({
     where: { id, userId: user.id },

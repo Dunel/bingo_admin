@@ -2,39 +2,12 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { computeMarkedNumbersForGrid } from "@/lib/marked-calls";
 import { prisma } from "@/lib/prisma";
+import { cardGridPatchBodySchema } from "@/lib/validations/cards";
+import { idParamSchema } from "@/lib/validations/common";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
-
-type GridPayload = (number | null)[][];
-
-function isValidGrid(grid: unknown): grid is GridPayload {
-  if (!Array.isArray(grid) || grid.length !== 5) {
-    return false;
-  }
-
-  for (let row = 0; row < 5; row += 1) {
-    const rowData = grid[row];
-    if (!Array.isArray(rowData) || rowData.length !== 5) {
-      return false;
-    }
-
-    for (let col = 0; col < 5; col += 1) {
-      const value = rowData[col];
-
-      if (row === 2 && col === 2 && value !== null) {
-        return false;
-      }
-
-      if (value !== null && (!Number.isInteger(value) || value < 1 || value > 75)) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
 
 export async function PATCH(request: Request, { params }: Params) {
   const user = await getCurrentUser();
@@ -43,13 +16,25 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
 
-  const { id } = await params;
-  const body = await request.json();
-  const grid = body?.grid;
-
-  if (!isValidGrid(grid)) {
-    return NextResponse.json({ error: "La grilla enviada no es válida." }, { status: 400 });
+  const parsedParams = idParamSchema.safeParse(await params);
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: parsedParams.error.issues[0]?.message ?? "ID inválido." }, { status: 400 });
   }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Debes enviar un cuerpo JSON válido." }, { status: 400 });
+  }
+
+  const parsedBody = cardGridPatchBodySchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: parsedBody.error.issues[0]?.message ?? "La grilla enviada no es válida." }, { status: 400 });
+  }
+
+  const { id } = parsedParams.data;
+  const { grid } = parsedBody.data;
 
   const card = await prisma.bingoCard.findFirst({
     where: { id, userId: user.id },
