@@ -1,20 +1,18 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardDescription, CardBody } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/cn";
 
-type CropRect = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-type Point = {
-  x: number;
-  y: number;
-};
+type Mode = "single" | "x4";
+type CropRect = { x: number; y: number; width: number; height: number };
+type Point = { x: number; y: number };
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -22,25 +20,25 @@ function clamp(value: number, min: number, max: number) {
 
 export default function NewCardPage() {
   const router = useRouter();
-  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const { toast } = useToast();
+  const overlayRef = React.useRef<HTMLDivElement | null>(null);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
 
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [cropRect, setCropRect] = useState<CropRect | null>(null);
-  const [cropRects, setCropRects] = useState<CropRect[]>([]);
-  const [dragStart, setDragStart] = useState<Point | null>(null);
-  const [dragCurrent, setDragCurrent] = useState<Point | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"single" | "x4">("single");
-  const [cardName, setCardName] = useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [cropRect, setCropRect] = React.useState<CropRect | null>(null);
+  const [cropRects, setCropRects] = React.useState<CropRect[]>([]);
+  const [dragStart, setDragStart] = React.useState<Point | null>(null);
+  const [dragCurrent, setDragCurrent] = React.useState<Point | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [info, setInfo] = React.useState<string | null>(null);
+  const [isPending, startTransition] = React.useTransition();
+  const [mode, setMode] = React.useState<Mode>("single");
+  const [cardName, setCardName] = React.useState("");
 
-  useEffect(() => {
+  React.useEffect(() => {
     return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
@@ -52,48 +50,29 @@ export default function NewCardPage() {
     setCropRects([]);
     setDragStart(null);
     setDragCurrent(null);
-
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    if (nextFile) {
-      setPreviewUrl(URL.createObjectURL(nextFile));
-      return;
-    }
-
-    setPreviewUrl(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(nextFile ? URL.createObjectURL(nextFile) : null);
   }
 
   function toLocalPoint(clientX: number, clientY: number): Point | null {
     const overlay = overlayRef.current;
-    if (!overlay) {
-      return null;
-    }
-
+    if (!overlay) return null;
     const rect = overlay.getBoundingClientRect();
-    const x = clamp(clientX - rect.left, 0, rect.width);
-    const y = clamp(clientY - rect.top, 0, rect.height);
-
-    return { x, y };
+    return {
+      x: clamp(clientX - rect.left, 0, rect.width),
+      y: clamp(clientY - rect.top, 0, rect.height),
+    };
   }
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (!previewUrl) {
-      return;
-    }
-
+    if (!previewUrl) return;
     event.preventDefault();
-
     const local = toLocalPoint(event.clientX, event.clientY);
-    if (!local) {
-      return;
-    }
-
+    if (!local) return;
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
-      // Fallback when pointer capture is not available.
+      /* noop */
     }
     setDragStart(local);
     setDragCurrent(local);
@@ -101,21 +80,13 @@ export default function NewCardPage() {
   }
 
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    if (!dragStart) {
-      return;
-    }
-
+    if (!dragStart) return;
     event.preventDefault();
-
     const local = toLocalPoint(event.clientX, event.clientY);
-    if (!local) {
-      return;
-    }
-
-    setDragCurrent(local);
+    if (local) setDragCurrent(local);
   }
 
-  function finalizeSelection(rectWidth: number, rectHeight: number, minX: number, minY: number, totalWidth: number, totalHeight: number) {
+  function finalize(rectWidth: number, rectHeight: number, minX: number, minY: number, totalWidth: number, totalHeight: number) {
     if (rectWidth < 20 || rectHeight < 20) {
       setError("Selecciona un área más grande para la grilla.");
       setDragStart(null);
@@ -123,7 +94,7 @@ export default function NewCardPage() {
       return;
     }
 
-    const normalizedRect = {
+    const normalized: CropRect = {
       x: minX / totalWidth,
       y: minY / totalHeight,
       width: rectWidth / totalWidth,
@@ -131,15 +102,14 @@ export default function NewCardPage() {
     };
 
     if (mode === "x4") {
-      const nextCount = Math.min(cropRects.length + 1, 4);
-      setCropRects((prev) => (prev.length >= 4 ? prev : [...prev, normalizedRect]));
+      setCropRects((prev) => (prev.length >= 4 ? prev : [...prev, normalized]));
       setInfo(
-        nextCount < 4
-          ? `Rectángulo ${nextCount}/4 guardado. Selecciona el siguiente cartón.`
+        cropRects.length < 3
+          ? `Rectángulo ${cropRects.length + 1}/4 guardado. Selecciona el siguiente cartón.`
           : "Listo: se guardaron 4 rectángulos.",
       );
     } else {
-      setCropRect(normalizedRect);
+      setCropRect(normalized);
       setInfo("Área de celdas seleccionada.");
     }
 
@@ -148,65 +118,58 @@ export default function NewCardPage() {
     setDragCurrent(null);
   }
 
-  function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    if (!dragStart || !dragCurrent) {
+  function finalizeFromPointer() {
+    if (!dragStart || !dragCurrent) return;
+    const overlay = overlayRef.current;
+    if (!overlay) {
+      setDragStart(null);
+      setDragCurrent(null);
       return;
     }
+    const rect = overlay.getBoundingClientRect();
+    const minX = Math.min(dragStart.x, dragCurrent.x);
+    const minY = Math.min(dragStart.y, dragCurrent.y);
+    const width = Math.abs(dragCurrent.x - dragStart.x);
+    const height = Math.abs(dragCurrent.y - dragStart.y);
+    finalize(width, height, minX, minY, rect.width, rect.height);
+  }
 
+  function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch {
-      // Fallback when pointer capture is not available.
+      /* noop */
     }
-
-    const overlay = overlayRef.current;
-    if (!overlay) {
-      setDragStart(null);
-      setDragCurrent(null);
-      return;
-    }
-
-    const rect = overlay.getBoundingClientRect();
-    const minX = Math.min(dragStart.x, dragCurrent.x);
-    const minY = Math.min(dragStart.y, dragCurrent.y);
-    const width = Math.abs(dragCurrent.x - dragStart.x);
-    const height = Math.abs(dragCurrent.y - dragStart.y);
-
-    finalizeSelection(width, height, minX, minY, rect.width, rect.height);
+    finalizeFromPointer();
   }
 
-  function onPointerCancel() {
-    if (!dragStart || !dragCurrent) {
-      return;
+  function onPointerCancel(event: React.PointerEvent<HTMLDivElement>) {
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* noop */
     }
-
-    const overlay = overlayRef.current;
-    if (!overlay) {
-      setDragStart(null);
-      setDragCurrent(null);
-      return;
-    }
-
-    const rect = overlay.getBoundingClientRect();
-    const minX = Math.min(dragStart.x, dragCurrent.x);
-    const minY = Math.min(dragStart.y, dragCurrent.y);
-    const width = Math.abs(dragCurrent.x - dragStart.x);
-    const height = Math.abs(dragCurrent.y - dragStart.y);
-
-    finalizeSelection(width, height, minX, minY, rect.width, rect.height);
+    finalizeFromPointer();
   }
 
-  const draftRect =
-    dragStart && dragCurrent
-      ? {
-          x: Math.min(dragStart.x, dragCurrent.x),
-          y: Math.min(dragStart.y, dragCurrent.y),
-          width: Math.abs(dragCurrent.x - dragStart.x),
-          height: Math.abs(dragCurrent.y - dragStart.y),
-        }
-      : null;
+  const draftRect: CropRect | null = React.useMemo(() => {
+    if (!dragStart || !dragCurrent) return null;
+    const overlay = overlayRef.current;
+    if (!overlay) return null;
+    const rect = overlay.getBoundingClientRect();
+    const x = Math.min(dragStart.x, dragCurrent.x);
+    const y = Math.min(dragStart.y, dragCurrent.y);
+    const w = Math.abs(dragCurrent.x - dragStart.x);
+    const h = Math.abs(dragCurrent.y - dragStart.y);
+    return {
+      x: x / rect.width,
+      y: y / rect.height,
+      width: w / rect.width,
+      height: h / rect.height,
+    };
+  }, [dragStart, dragCurrent]);
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setInfo(null);
@@ -215,170 +178,173 @@ export default function NewCardPage() {
       setError("Debes seleccionar una imagen.");
       return;
     }
-
-    if (mode === "x4") {
-      if (cropRects.length !== 4) {
-        setError("Debes seleccionar 4 rectángulos, uno por cada cartón.");
-        return;
-      }
-    } else {
-      if (!cropRect) {
-        setError("Primero selecciona el espacio de celdas en la imagen.");
-        return;
-      }
+    if (mode === "x4" && cropRects.length !== 4) {
+      setError("Debes seleccionar 4 rectángulos, uno por cada cartón.");
+      return;
+    }
+    if (mode === "single" && !cropRect) {
+      setError("Primero selecciona el espacio de celdas en la imagen.");
+      return;
     }
 
-    setLoading(true);
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
+        formData.append("name", cardName);
 
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      formData.append("name", cardName);
+        const uploadResponse = await fetch("/api/cards", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadPayload = await uploadResponse.json();
+        if (!uploadResponse.ok) {
+          const message = uploadPayload.error ?? "No se pudo subir la imagen.";
+          setError(message);
+          toast({ title: "Error al subir", description: message, variant: "error" });
+          return;
+        }
 
-      const uploadResponse = await fetch("/api/cards", {
-        method: "POST",
-        body: formData,
-      });
+        const cardId = uploadPayload.card.id as string;
 
-      const uploadPayload = await uploadResponse.json();
+        const generateResponse = await fetch(`/api/cards/${cardId}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(mode === "x4" ? { mode, cropRects } : { mode, cropRect }),
+        });
+        const generatePayload = await generateResponse.json();
+        if (!generateResponse.ok) {
+          const message = generatePayload.error ?? "No se pudo generar la carta.";
+          setError(message);
+          toast({ title: "Error al generar", description: message, variant: "error" });
+          return;
+        }
 
-      if (!uploadResponse.ok) {
-        setError(uploadPayload.error ?? "No se pudo subir la imagen.");
-        return;
+        const extractedCount = Number(generatePayload.extractedCount ?? 0);
+        const message =
+          extractedCount > 0
+            ? mode === "x4"
+              ? `OCR detectó ${extractedCount} números en los 4 cartones.`
+              : `OCR detectó ${extractedCount} números.`
+            : "OCR no detectó números suficientes. Puedes corregir la grilla manualmente.";
+
+        setInfo(message);
+        toast({
+          title: "Carta creada",
+          description: message,
+          variant: extractedCount > 0 ? "success" : "info",
+        });
+
+        if (mode === "x4") {
+          router.push("/dashboard");
+        } else {
+          router.push(`/cards/${cardId}`);
+        }
+      } catch (err) {
+        const m = err instanceof Error ? err.message : "Error inesperado";
+        setError(m);
+        toast({ title: "Error", description: m, variant: "error" });
       }
-
-      const cardId = uploadPayload.card.id as string;
-
-      const generateResponse = await fetch(`/api/cards/${cardId}/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          mode === "x4"
-            ? { mode, cropRects }
-            : { mode, cropRect },
-        ),
-      });
-
-      const generatePayload = await generateResponse.json();
-
-      if (!generateResponse.ok) {
-        setError(generatePayload.error ?? "No se pudo generar la carta.");
-        return;
-      }
-
-      const extractedCount = Number(generatePayload.extractedCount ?? 0);
-      if (extractedCount > 0) {
-        setInfo(
-          mode === "x4"
-            ? `OCR detectó ${extractedCount} números en los 4 cartones.`
-            : `OCR detectó ${extractedCount} números.`,
-        );
-      } else {
-        setInfo("OCR no detectó números suficientes. Puedes corregir la grilla manualmente.");
-      }
-
-      if (mode === "x4") {
-        router.push("/dashboard");
-      } else {
-        router.push(`/cards/${cardId}`);
-      }
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
+  const validSelection = mode === "single" ? !!cropRect : cropRects.length === 4;
+
   return (
-    <main className="min-h-screen bg-sky-50 p-6">
-      <section className="mx-auto w-full max-w-2xl rounded-2xl bg-white p-8 shadow">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-3xl font-black text-zinc-900">Registrar nueva carta</h1>
-          <Link
-            href="/dashboard"
-            className="rounded-lg border border-sky-300 bg-sky-100 px-3 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-sky-200"
-          >
-            Volver
-          </Link>
+    <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--color-brand-600)] dark:text-[var(--color-brand-300)]">
+            Nueva carta
+          </p>
+          <h1 className="text-2xl font-black tracking-tight text-[var(--color-fg)]">Registrar cartón</h1>
         </div>
+        <Link href="/dashboard">
+          <Button variant="outline" size="sm" leftIcon={<ArrowLeftIcon className="h-4 w-4" />}>
+            Volver
+          </Button>
+        </Link>
+      </div>
 
-        <p className="mt-2 text-sm font-medium text-zinc-700">Sube una imagen jpg, jpeg o png para generar la carta.</p>
-
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-          <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
-            <p className="text-sm font-semibold text-zinc-900">Formato de imagen</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("single");
-                  setCropRects([]);
-                  setCropRect(null);
-                  setInfo("Modo 1 cartón seleccionado.");
-                }}
-                className={[
-                  "rounded-lg px-3 py-2 text-sm",
-                  mode === "single" ? "bg-zinc-900 text-white" : "border border-zinc-300 bg-white text-zinc-700",
-                ].join(" ")}
-              >
-                1 cartón
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("x4");
-                  setCropRects([]);
-                  setCropRect(null);
-                  setInfo("Modo x4 seleccionado. Dibuja 4 rectángulos.");
-                }}
-                className={[
-                  "rounded-lg px-3 py-2 text-sm",
-                  mode === "x4" ? "bg-zinc-900 text-white" : "border border-zinc-300 bg-white text-zinc-700",
-                ].join(" ")}
-              >
-                4 cartones (x4)
-              </button>
+      <Card>
+        <CardHeader>
+          <CardTitle>Sube una imagen</CardTitle>
+          <CardDescription>
+            Formatos: JPG, JPEG o PNG. Dibuja un rectángulo sobre la grilla de celdas y la IA extraerá los números.
+          </CardDescription>
+        </CardHeader>
+        <CardBody>
+          <form className="space-y-5" onSubmit={onSubmit} noValidate>
+            <div>
+              <Label className="mb-1.5">Formato</Label>
+              <div className="inline-flex rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1">
+                <SegmentButton
+                  active={mode === "single"}
+                  onClick={() => {
+                    setMode("single");
+                    setCropRects([]);
+                    setCropRect(null);
+                    setInfo("Modo 1 cartón seleccionado.");
+                  }}
+                >
+                  1 cartón
+                </SegmentButton>
+                <SegmentButton
+                  active={mode === "x4"}
+                  onClick={() => {
+                    setMode("x4");
+                    setCropRects([]);
+                    setCropRect(null);
+                    setInfo("Modo x4. Dibuja 4 rectángulos.");
+                  }}
+                >
+                  4 cartones
+                </SegmentButton>
+              </div>
             </div>
-          </div>
 
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold text-zinc-900">Nombre del cartón</span>
-            <input
-              type="text"
-              value={cardName}
-              onChange={(event) => setCardName(event.target.value)}
-              placeholder={mode === "x4" ? "Ej: CartonSemana (se guardará como CartonSemana/1..4)" : "Ej: Carton principal"}
-              maxLength={80}
-              className="w-full rounded-xl border border-sky-300 bg-sky-50 p-3 font-medium text-zinc-900 outline-none ring-sky-300 transition focus:ring"
-            />
-          </label>
+            <div className="space-y-1.5">
+              <Label htmlFor="card-name">Nombre del cartón</Label>
+              <Input
+                id="card-name"
+                type="text"
+                value={cardName}
+                onChange={(event) => setCardName(event.target.value)}
+                placeholder={mode === "x4" ? "CartonSemana (se guarda como /1..4)" : "Cartón principal"}
+                maxLength={80}
+              />
+            </div>
 
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold text-zinc-900">Imagen de carta</span>
-            <input
-              type="file"
-              accept="image/jpg,image/jpeg,image/png"
-              onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
-              className="w-full rounded-xl border border-sky-300 bg-sky-50 p-3 font-medium text-zinc-900 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
-            />
-          </label>
+            <div className="space-y-1.5">
+              <Label htmlFor="card-image">Imagen</Label>
+              <input
+                id="card-image"
+                type="file"
+                accept="image/jpg,image/jpeg,image/png"
+                onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                className="block w-full cursor-pointer rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-fg)] file:mr-3 file:cursor-pointer file:rounded-[var(--radius-sm)] file:border-0 file:bg-[var(--color-fg)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--color-fg-inverse)] hover:file:opacity-90"
+              />
+            </div>
 
-          {previewUrl ? (
-            <div className="space-y-2">
-              <p className="text-sm text-zinc-700">
-                {mode === "x4"
-                  ? `Dibuja 4 rectángulos independientes (uno por cartón). ${cropRects.length}/4 seleccionados.`
-                  : "Dibuja un rectángulo sobre la grilla de celdas para que OCR lea solo esa zona."}
-              </p>
-              <div className="overflow-hidden rounded-xl border border-zinc-300 bg-zinc-100 p-2">
-                <div className="flex justify-center">
-                  <div className="relative inline-block">
+            {previewUrl ? (
+              <div className="space-y-3">
+                <p className="text-sm text-[var(--color-fg-muted)]">
+                  {mode === "x4"
+                    ? `Dibuja 4 rectángulos (uno por cartón). ${cropRects.length}/4 seleccionados.`
+                    : "Dibuja un rectángulo sobre la grilla de celdas."}
+                </p>
+                <div
+                  ref={containerRef}
+                  className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2"
+                >
+                  <div className="relative inline-block w-full">
                     <img
                       src={previewUrl}
                       alt="Vista previa"
                       draggable={false}
                       onDragStart={(event) => event.preventDefault()}
-                      className="block max-h-[420px] w-auto max-w-full"
+                      className="block max-h-[420px] w-auto max-w-full mx-auto"
                     />
-
                     <div
                       ref={overlayRef}
                       className="absolute inset-0 touch-none select-none cursor-crosshair"
@@ -390,92 +356,148 @@ export default function NewCardPage() {
                     />
 
                     {mode === "single" && cropRect ? (
-                      <div
-                        className="pointer-events-none absolute border-2 border-sky-500 bg-sky-500/15"
-                        style={{
-                          left: `${cropRect.x * 100}%`,
-                          top: `${cropRect.y * 100}%`,
-                          width: `${cropRect.width * 100}%`,
-                          height: `${cropRect.height * 100}%`,
-                        }}
-                      />
+                      <CropOverlay rect={cropRect} index={0} variant="confirmed" />
                     ) : null}
-
                     {mode === "x4"
                       ? cropRects.map((rect, index) => (
-                          <div
-                            key={`${rect.x}-${rect.y}-${index}`}
-                            className="pointer-events-none absolute border-2 border-sky-500 bg-sky-500/10"
-                            style={{
-                              left: `${rect.x * 100}%`,
-                              top: `${rect.y * 100}%`,
-                              width: `${rect.width * 100}%`,
-                              height: `${rect.height * 100}%`,
-                            }}
-                          >
-                            <span className="absolute left-1 top-1 rounded bg-zinc-900 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                              {index + 1}
-                            </span>
-                          </div>
+                          <CropOverlay key={`${index}-${rect.x}`} rect={rect} index={index} variant="confirmed" />
                         ))
                       : null}
-
-                    {draftRect ? (
-                      <div
-                        className="pointer-events-none absolute border-2 border-sky-400 bg-sky-400/20"
-                        style={{
-                          left: `${draftRect.x}px`,
-                          top: `${draftRect.y}px`,
-                          width: `${draftRect.width}px`,
-                          height: `${draftRect.height}px`,
-                        }}
-                      />
-                    ) : null}
+                    {draftRect ? <CropOverlay rect={draftRect} index={-1} variant="draft" /> : null}
                   </div>
                 </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (mode === "x4") {
+                        setCropRects([]);
+                        setInfo("Selecciona nuevamente los 4 rectángulos.");
+                      } else {
+                        setCropRect(null);
+                        setInfo("Selecciona nuevamente el área de celdas.");
+                      }
+                    }}
+                  >
+                    Limpiar selección
+                  </Button>
+                  {mode === "x4" ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setCropRects((prev) => prev.slice(0, -1));
+                        setInfo("Se eliminó el último rectángulo.");
+                      }}
+                      disabled={cropRects.length === 0}
+                    >
+                      Deshacer último
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (mode === "x4") {
-                    setCropRects([]);
-                    setInfo("Selecciona nuevamente los 4 rectángulos.");
-                  } else {
-                    setCropRect(null);
-                    setInfo("Selecciona nuevamente el área de celdas.");
-                  }
-                }}
-                className="rounded-lg border border-sky-300 bg-sky-100 px-3 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-sky-200"
+            ) : null}
+
+            {error ? (
+              <p
+                role="alert"
+                className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/30 bg-[var(--color-danger-bg)] px-3 py-2 text-sm text-[var(--color-danger-fg)] animate-fade-in"
               >
-                Limpiar selección
-              </button>
-              {mode === "x4" ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCropRects((prev) => prev.slice(0, -1));
-                    setInfo("Se eliminó el último rectángulo.");
-                  }}
-                  disabled={cropRects.length === 0}
-                  className="ml-2 rounded-lg border border-sky-300 bg-sky-100 px-3 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Deshacer último
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+                {error}
+              </p>
+            ) : null}
+            {info ? (
+              <p className="rounded-[var(--radius-md)] border border-[var(--color-info)]/30 bg-[var(--color-info-bg)] px-3 py-2 text-sm text-[var(--color-info-fg)] animate-fade-in">
+                {info}
+              </p>
+            ) : null}
 
-          {error ? <p className="rounded-lg bg-sky-100 px-3 py-2 text-sm text-zinc-800">{error}</p> : null}
-          {info ? <p className="rounded-lg bg-sky-100 px-3 py-2 text-sm text-zinc-800">{info}</p> : null}
-
-          <button
-            disabled={loading}
-            className="rounded-xl bg-zinc-900 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading ? "Procesando..." : "Subir y generar"}
-          </button>
-        </form>
-      </section>
+            <Button
+              type="submit"
+              loading={isPending}
+              disabled={!file || !validSelection}
+              size="lg"
+              fullWidth
+            >
+              {isPending ? "Procesando..." : "Subir y generar"}
+            </Button>
+          </form>
+        </CardBody>
+      </Card>
     </main>
+  );
+}
+
+interface SegmentButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  active: boolean;
+}
+
+function SegmentButton({ active, className, children, ...props }: SegmentButtonProps) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm font-semibold transition-all",
+        active
+          ? "bg-[var(--color-surface)] text-[var(--color-fg)] shadow-sm"
+          : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CropOverlay({
+  rect,
+  index,
+  variant,
+}: {
+  rect: CropRect;
+  index: number;
+  variant: "draft" | "confirmed";
+}) {
+  const isDraft = variant === "draft";
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute rounded-sm transition-colors",
+        isDraft
+          ? "border-2 border-dashed border-[var(--color-brand-400)] bg-[var(--color-brand-500)]/15 animate-fade-in"
+          : "border-2 border-[var(--color-success)] bg-[var(--color-success)]/15",
+      )}
+      style={{
+        left: `${rect.x * 100}%`,
+        top: `${rect.y * 100}%`,
+        width: `${rect.width * 100}%`,
+        height: `${rect.height * 100}%`,
+      }}
+    >
+      {index >= 0 ? (
+        <span className="absolute left-1 top-1 rounded bg-[var(--color-fg)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--color-fg-inverse)]">
+          {index + 1}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function ArrowLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path
+        d="M12 4l-6 6 6 6M6 10h10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
