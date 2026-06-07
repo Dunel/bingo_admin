@@ -62,18 +62,29 @@ const cropRectSchema = z.object({
   height: z.number().finite(),
 });
 
+export const MODE_RECT_COUNT = {
+  single: 1,
+  x2: 2,
+  x4: 4,
+  x6: 6,
+} as const;
+export type CardMode = keyof typeof MODE_RECT_COUNT;
+
 export const generateBodySchema = z
   .object({
     cropRect: cropRectSchema.optional(),
     cropRects: z.array(cropRectSchema).optional(),
-    mode: z.enum(["single", "x4"]).optional(),
+    mode: z.enum(["single", "x2", "x4", "x6"]).optional(),
   })
   .superRefine((value, context) => {
-    if (value.mode === "x4" && Array.isArray(value.cropRects) && value.cropRects.length !== 4) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "En modo x4 debes enviar 4 rectángulos válidos.",
-        path: ["cropRects"],
-      });
+    if (value.mode && value.mode !== "single") {
+      const expected = MODE_RECT_COUNT[value.mode];
+      if (Array.isArray(value.cropRects) && value.cropRects.length !== expected) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `En modo ${value.mode} debes enviar ${expected} rectángulos válidos.`,
+          path: ["cropRects"],
+        });
+      }
     }
   });

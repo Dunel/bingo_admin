@@ -32,6 +32,8 @@ export default function DashboardPage() {
   const [savedFigures, setSavedFigures] = React.useState<SavedFigure[]>([]);
   const [selectedFigureIds, setSelectedFigureIds] = React.useState<string[]>([]);
   const lastWinnerIdsRef = React.useRef<Set<string>>(new Set());
+  const lastMarkedNumberRef = React.useRef<number | null>(null);
+  const lastOneAwayKeysRef = React.useRef<Set<string>>(new Set());
 
   const isAuthError =
     !!error && (error as Error & { status?: number }).status === 401;
@@ -45,7 +47,7 @@ export default function DashboardPage() {
     return savedFigures.filter((f) => ids.has(f.id)).map((f) => f.pattern);
   }, [savedFigures, selectedFigureIds]);
 
-  const { matchingCards, matchingCardIds, cellSet, hasSelection } = useFigureEngine({
+  const { matchingCards, matchingCardIds, cellSet, hasSelection, oneAwayCandidates } = useFigureEngine({
     cards,
     mode: figureMode,
     patterns: activePatterns,
@@ -63,18 +65,51 @@ export default function DashboardPage() {
       [...currentIds].some((id) => !previous.has(id));
 
     if (isNewSet && previous.size > 0) {
-      const newCount = [...currentIds].filter((id) => !previous.has(id)).length;
-      if (newCount > 0) {
+      const newIds = [...currentIds].filter((id) => !previous.has(id));
+      const newCards = matchingCards.filter((c) => newIds.includes(c.id));
+      const cardLabels = newCards.map((c) => c.name ?? `Cartón ${c.id.slice(0, 8)}`);
+      const lastMarked = lastMarkedNumberRef.current;
+      const prefix = lastMarked ? `Ganaste con el ${lastMarked}: ` : "";
+      const description = `${prefix}${cardLabels.join(", ")}`;
+      toast({
+        title: "¡Bingo!",
+        description,
+        variant: "winner",
+        duration: 6000,
+      });
+      lastMarkedNumberRef.current = null;
+    }
+    lastWinnerIdsRef.current = currentIds;
+  }, [matchingCards, toast]);
+
+  React.useEffect(() => {
+    const currentKeys = new Set(oneAwayCandidates.map((c) => `${c.cardId}|${c.patternKey}`));
+    const previous = lastOneAwayKeysRef.current;
+    const newKeys = [...currentKeys].filter((k) => !previous.has(k));
+
+    if (newKeys.length > 0 && previous.size > 0) {
+      const newOnes = oneAwayCandidates.filter((c) => newKeys.includes(`${c.cardId}|${c.patternKey}`));
+      const byCard = new Map<string, typeof newOnes>();
+      for (const item of newOnes) {
+        const list = byCard.get(item.cardId) ?? [];
+        list.push(item);
+        byCard.set(item.cardId, list);
+      }
+      for (const [cardId, items] of byCard) {
+        const cardLabel = items[0].cardName ?? `Cartón ${cardId.slice(0, 8)}`;
+        const descriptions = items.map((i) =>
+          `Con el ${i.missingNumber} ganas ${i.patternKey === "full" ? "el cartón lleno" : `la ${i.patternLabel}`}.`,
+        );
         toast({
-          title: "¡Bingo!",
-          description: `${newCount} cartón${newCount === 1 ? "" : "es"} completó la figura.`,
-          variant: "winner",
+          title: `¡Casi! ${cardLabel}`,
+          description: descriptions.join(" "),
+          variant: "info",
           duration: 6000,
         });
       }
     }
-    lastWinnerIdsRef.current = currentIds;
-  }, [matchingCards, toast]);
+    lastOneAwayKeysRef.current = currentKeys;
+  }, [oneAwayCandidates, toast]);
 
   const draftCellCount = React.useMemo(() => countPatternCells(draft), [draft]);
 
@@ -127,6 +162,18 @@ export default function DashboardPage() {
     setSelectedFigureIds((prev) => prev.filter((x) => x !== id));
   }
 
+  async function handleMarkNumber(number: number) {
+    lastMarkedNumberRef.current = number;
+    return actions.markNumber(number);
+  }
+
+  function handleScrollToCard(cardId: string) {
+    const element = document.getElementById(`card-${cardId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+
   if (isAuthError) return null;
 
   if (error && !isAuthError) {
@@ -156,7 +203,11 @@ export default function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6">
-          <MarkNumberForm onMark={actions.markNumber} />
+          <MarkNumberForm
+            onMark={handleMarkNumber}
+            oneAwayCandidates={oneAwayCandidates}
+            onScrollToCard={handleScrollToCard}
+          />
           <FigureEditor
             mode={figureMode}
             onModeChange={setFigureMode}

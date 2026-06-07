@@ -9,10 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardBody } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
+import { CameraCapture } from "@/components/camera-capture";
 
-type Mode = "single" | "x4";
+type Mode = "single" | "x2" | "x4" | "x6";
 type CropRect = { x: number; y: number; width: number; height: number };
 type Point = { x: number; y: number };
+
+const EXPECTED_RECTS: Record<Mode, number> = { single: 1, x2: 2, x4: 4, x6: 6 };
+const MODE_OPTIONS: { value: Mode; label: string }[] = [
+  { value: "single", label: "1 cartón" },
+  { value: "x2", label: "2 cartones" },
+  { value: "x4", label: "4 cartones" },
+  { value: "x6", label: "6 cartones" },
+];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -35,6 +44,7 @@ export default function NewCardPage() {
   const [isPending, startTransition] = React.useTransition();
   const [mode, setMode] = React.useState<Mode>("single");
   const [cardName, setCardName] = React.useState("");
+  const [showCamera, setShowCamera] = React.useState(false);
 
   React.useEffect(() => {
     return () => {
@@ -101,12 +111,15 @@ export default function NewCardPage() {
       height: rectHeight / totalHeight,
     };
 
-    if (mode === "x4") {
-      setCropRects((prev) => (prev.length >= 4 ? prev : [...prev, normalized]));
+    if (mode !== "single") {
+      const expected = EXPECTED_RECTS[mode];
+      const newCount = cropRects.length + 1;
+      const clamped = newCount > expected ? expected : newCount;
+      setCropRects((prev) => (prev.length >= expected ? prev : [...prev, normalized]));
       setInfo(
-        cropRects.length < 3
-          ? `Rectángulo ${cropRects.length + 1}/4 guardado. Selecciona el siguiente cartón.`
-          : "Listo: se guardaron 4 rectángulos.",
+        clamped < expected
+          ? `Rectángulo ${clamped}/${expected} guardado. Selecciona el siguiente cartón.`
+          : `Listo: se guardaron ${expected} rectángulos.`,
       );
     } else {
       setCropRect(normalized);
@@ -178,8 +191,8 @@ export default function NewCardPage() {
       setError("Debes seleccionar una imagen.");
       return;
     }
-    if (mode === "x4" && cropRects.length !== 4) {
-      setError("Debes seleccionar 4 rectángulos, uno por cada cartón.");
+    if (mode !== "single" && cropRects.length !== EXPECTED_RECTS[mode]) {
+      setError(`Debes seleccionar ${EXPECTED_RECTS[mode]} rectángulos, uno por cada cartón.`);
       return;
     }
     if (mode === "single" && !cropRect) {
@@ -210,7 +223,7 @@ export default function NewCardPage() {
         const generateResponse = await fetch(`/api/cards/${cardId}/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(mode === "x4" ? { mode, cropRects } : { mode, cropRect }),
+          body: JSON.stringify(mode !== "single" ? { mode, cropRects } : { mode, cropRect }),
         });
         const generatePayload = await generateResponse.json();
         if (!generateResponse.ok) {
@@ -221,10 +234,12 @@ export default function NewCardPage() {
         }
 
         const extractedCount = Number(generatePayload.extractedCount ?? 0);
+        const isMulti = mode !== "single";
+        const expected = EXPECTED_RECTS[mode];
         const message =
           extractedCount > 0
-            ? mode === "x4"
-              ? `OCR detectó ${extractedCount} números en los 4 cartones.`
+            ? isMulti
+              ? `OCR detectó ${extractedCount} números en los ${expected} cartones.`
               : `OCR detectó ${extractedCount} números.`
             : "OCR no detectó números suficientes. Puedes corregir la grilla manualmente.";
 
@@ -235,7 +250,7 @@ export default function NewCardPage() {
           variant: extractedCount > 0 ? "success" : "info",
         });
 
-        if (mode === "x4") {
+        if (isMulti) {
           router.push("/dashboard");
         } else {
           router.push(`/cards/${cardId}`);
@@ -248,7 +263,7 @@ export default function NewCardPage() {
     });
   }
 
-  const validSelection = mode === "single" ? !!cropRect : cropRects.length === 4;
+  const validSelection = mode === "single" ? !!cropRect : cropRects.length === EXPECTED_RECTS[mode];
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
@@ -277,29 +292,26 @@ export default function NewCardPage() {
           <form className="space-y-5" onSubmit={onSubmit} noValidate>
             <div>
               <Label className="mb-1.5">Formato</Label>
-              <div className="inline-flex rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1">
-                <SegmentButton
-                  active={mode === "single"}
-                  onClick={() => {
-                    setMode("single");
-                    setCropRects([]);
-                    setCropRect(null);
-                    setInfo("Modo 1 cartón seleccionado.");
-                  }}
-                >
-                  1 cartón
-                </SegmentButton>
-                <SegmentButton
-                  active={mode === "x4"}
-                  onClick={() => {
-                    setMode("x4");
-                    setCropRects([]);
-                    setCropRect(null);
-                    setInfo("Modo x4. Dibuja 4 rectángulos.");
-                  }}
-                >
-                  4 cartones
-                </SegmentButton>
+              <div className="inline-flex flex-wrap rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1">
+                {MODE_OPTIONS.map((opt) => (
+                  <SegmentButton
+                    key={opt.value}
+                    active={mode === opt.value}
+                    onClick={() => {
+                      setMode(opt.value);
+                      setCropRects([]);
+                      setCropRect(null);
+                      const expected = EXPECTED_RECTS[opt.value];
+                      setInfo(
+                        opt.value === "single"
+                          ? "Modo 1 cartón seleccionado."
+                          : `Modo ${opt.value}. Dibuja ${expected} rectángulos.`,
+                      );
+                    }}
+                  >
+                    {opt.label}
+                  </SegmentButton>
+                ))}
               </div>
             </div>
 
@@ -310,27 +322,39 @@ export default function NewCardPage() {
                 type="text"
                 value={cardName}
                 onChange={(event) => setCardName(event.target.value)}
-                placeholder={mode === "x4" ? "CartonSemana (se guarda como /1..4)" : "Cartón principal"}
+                placeholder={mode === "single" ? "Cartón principal" : `CartonSemana (se guarda como /1..${EXPECTED_RECTS[mode]})`}
                 maxLength={80}
               />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="card-image">Imagen</Label>
-              <input
-                id="card-image"
-                type="file"
-                accept="image/jpg,image/jpeg,image/png"
-                onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
-                className="block w-full cursor-pointer rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-fg)] file:mr-3 file:cursor-pointer file:rounded-[var(--radius-sm)] file:border-0 file:bg-[var(--color-fg)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--color-fg-inverse)] hover:file:opacity-90"
-              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  id="card-image"
+                  type="file"
+                  accept="image/jpg,image/jpeg,image/png"
+                  onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                  className="block w-full cursor-pointer rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-fg)] file:mr-3 file:cursor-pointer file:rounded-[var(--radius-sm)] file:border-0 file:bg-[var(--color-fg)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--color-fg-inverse)] hover:file:opacity-90"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  onClick={() => setShowCamera(true)}
+                  leftIcon={<CameraIcon className="h-4 w-4" />}
+                  className="shrink-0"
+                >
+                  Usar cámara
+                </Button>
+              </div>
             </div>
 
             {previewUrl ? (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--color-fg-muted)]">
-                  {mode === "x4"
-                    ? `Dibuja 4 rectángulos (uno por cartón). ${cropRects.length}/4 seleccionados.`
+                  {mode !== "single"
+                    ? `Dibuja ${EXPECTED_RECTS[mode]} rectángulos (uno por cartón). ${cropRects.length}/${EXPECTED_RECTS[mode]} seleccionados.`
                     : "Dibuja un rectángulo sobre la grilla de celdas."}
                 </p>
                 <div
@@ -358,7 +382,7 @@ export default function NewCardPage() {
                     {mode === "single" && cropRect ? (
                       <CropOverlay rect={cropRect} index={0} variant="confirmed" />
                     ) : null}
-                    {mode === "x4"
+                    {mode !== "single"
                       ? cropRects.map((rect, index) => (
                           <CropOverlay key={`${index}-${rect.x}`} rect={rect} index={index} variant="confirmed" />
                         ))
@@ -372,9 +396,9 @@ export default function NewCardPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (mode === "x4") {
+                      if (mode !== "single") {
                         setCropRects([]);
-                        setInfo("Selecciona nuevamente los 4 rectángulos.");
+                        setInfo(`Selecciona nuevamente los ${EXPECTED_RECTS[mode]} rectángulos.`);
                       } else {
                         setCropRect(null);
                         setInfo("Selecciona nuevamente el área de celdas.");
@@ -383,7 +407,7 @@ export default function NewCardPage() {
                   >
                     Limpiar selección
                   </Button>
-                  {mode === "x4" ? (
+                  {mode !== "single" ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -427,6 +451,16 @@ export default function NewCardPage() {
           </form>
         </CardBody>
       </Card>
+
+      {showCamera ? (
+        <CameraCapture
+          onCapture={(capturedFile) => {
+            onFileChange(capturedFile);
+            setShowCamera(false);
+          }}
+          onClose={() => setShowCamera(false)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -498,6 +532,20 @@ function ArrowLeftIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function CameraIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path
+        d="M3 6h2l1.5-2h7L15 6h2a1 1 0 011 1v8a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="11" r="3" stroke="currentColor" strokeWidth="1.6" />
     </svg>
   );
 }

@@ -6,6 +6,14 @@ import type { Card } from "./use-dashboard-data";
 export type FigureMode = "custom" | "full";
 export type FigurePattern = boolean[][];
 
+export interface OneAwayCandidate {
+  cardId: string;
+  cardName: string | null;
+  patternKey: string;
+  patternLabel: string;
+  missingNumber: number;
+}
+
 export function createEmptyPattern(): FigurePattern {
   return Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false));
 }
@@ -91,5 +99,73 @@ export function useFigureEngine({
 
   const hasSelection = mode === "full" || patterns.length > 0;
 
-  return { matchingCards, matchingCardIds, cellSet, hasSelection };
+  const oneAwayCandidates = useMemo(
+    () => findOneAwayCandidates(cards, mode, patterns, matchingCardIds),
+    [cards, mode, patterns, matchingCardIds],
+  );
+
+  return { matchingCards, matchingCardIds, cellSet, hasSelection, oneAwayCandidates };
+}
+
+export function findOneAwayCandidates(
+  cards: Card[],
+  mode: FigureMode,
+  patterns: FigurePattern[],
+  excludeCardIds: Set<string>,
+): OneAwayCandidate[] {
+  const results: OneAwayCandidate[] = [];
+
+  for (const card of cards) {
+    if (!card.correctedGrid || excludeCardIds.has(card.id)) continue;
+
+    if (mode === "full") {
+      const unmarked: { row: number; col: number; value: number }[] = [];
+      for (let row = 0; row < 5; row += 1) {
+        for (let col = 0; col < 5; col += 1) {
+          if (isCellMarked(card, row, col)) continue;
+          const value = card.correctedGrid[row]?.[col] ?? null;
+          if (value === null) continue;
+          unmarked.push({ row, col, value });
+        }
+      }
+      if (unmarked.length === 1) {
+        results.push({
+          cardId: card.id,
+          cardName: card.name,
+          patternKey: "full",
+          patternLabel: "cartón lleno",
+          missingNumber: unmarked[0].value,
+        });
+      }
+      continue;
+    }
+
+    if (patterns.length === 0) continue;
+
+    for (let pi = 0; pi < patterns.length; pi += 1) {
+      const pattern = patterns[pi];
+      const key = patternKey(pattern);
+      const unmarked: { row: number; col: number; value: number }[] = [];
+      for (let row = 0; row < 5; row += 1) {
+        for (let col = 0; col < 5; col += 1) {
+          if (!pattern[row]?.[col]) continue;
+          if (isCellMarked(card, row, col)) continue;
+          const value = card.correctedGrid[row]?.[col] ?? null;
+          if (value === null) continue;
+          unmarked.push({ row, col, value });
+        }
+      }
+      if (unmarked.length === 1) {
+        results.push({
+          cardId: card.id,
+          cardName: card.name,
+          patternKey: key,
+          patternLabel: `Figura ${pi + 1}`,
+          missingNumber: unmarked[0].value,
+        });
+      }
+    }
+  }
+
+  return results;
 }

@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { computeMarkedNumbersForGrid } from "@/lib/marked-calls";
 import { extractBingoGridFromDataUrl, type OcrCropRect } from "@/lib/ocr";
 import { prisma } from "@/lib/prisma";
-import { generateBodySchema } from "@/lib/validations/cards";
+import { generateBodySchema, MODE_RECT_COUNT, type CardMode } from "@/lib/validations/cards";
 import { idParamSchema } from "@/lib/validations/common";
 
 type GeneratedCardStatus = "PROCESSED" | "ERROR";
@@ -13,8 +13,24 @@ type Params = {
   params: Promise<{ id: string }>;
 };
 
+function splitIntoX2CropRects(base: OcrCropRect): OcrCropRect[] {
+  const halfWidth = base.width / 2;
+  const insetX = Math.min(base.width * 0.008, halfWidth * 0.08);
+  const insetY = Math.min(base.height * 0.008, base.height * 0.08);
+
+  const leftX = base.x + insetX;
+  const rightX = base.x + halfWidth + insetX;
+  const topY = base.y + insetY;
+  const cellWidth = Math.max(halfWidth - insetX * 2, 0.02);
+  const cellHeight = Math.max(base.height - insetY * 2, 0.02);
+
+  return [
+    { x: leftX, y: topY, width: cellWidth, height: cellHeight },
+    { x: rightX, y: topY, width: cellWidth, height: cellHeight },
+  ];
+}
+
 function splitIntoX4CropRects(base: OcrCropRect): OcrCropRect[] {
-  // Divide exactamente en 2x2; un pequeño inset evita bordes gruesos de separación.
   const halfWidth = base.width / 2;
   const halfHeight = base.height / 2;
   const insetX = Math.min(base.width * 0.008, halfWidth * 0.08);
@@ -33,6 +49,34 @@ function splitIntoX4CropRects(base: OcrCropRect): OcrCropRect[] {
     { x: leftX, y: bottomY, width: quadWidth, height: quadHeight },
     { x: rightX, y: bottomY, width: quadWidth, height: quadHeight },
   ];
+}
+
+function splitIntoX6CropRects(base: OcrCropRect): OcrCropRect[] {
+  const thirdWidth = base.width / 3;
+  const halfHeight = base.height / 2;
+  const insetX = Math.min(base.width * 0.008, thirdWidth * 0.08);
+  const insetY = Math.min(base.height * 0.008, halfHeight * 0.08);
+
+  const colX = (col: number) => base.x + thirdWidth * col + insetX;
+  const rowY = (row: number) => base.y + halfHeight * row + insetY;
+  const cellWidth = Math.max(thirdWidth - insetX * 2, 0.02);
+  const cellHeight = Math.max(halfHeight - insetY * 2, 0.02);
+
+  return [
+    { x: colX(0), y: rowY(0), width: cellWidth, height: cellHeight },
+    { x: colX(1), y: rowY(0), width: cellWidth, height: cellHeight },
+    { x: colX(2), y: rowY(0), width: cellWidth, height: cellHeight },
+    { x: colX(0), y: rowY(1), width: cellWidth, height: cellHeight },
+    { x: colX(1), y: rowY(1), width: cellWidth, height: cellHeight },
+    { x: colX(2), y: rowY(1), width: cellWidth, height: cellHeight },
+  ];
+}
+
+function splitForMode(mode: CardMode, base: OcrCropRect): OcrCropRect[] {
+  if (mode === "x2") return splitIntoX2CropRects(base);
+  if (mode === "x4") return splitIntoX4CropRects(base);
+  if (mode === "x6") return splitIntoX6CropRects(base);
+  return [base];
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -86,15 +130,18 @@ export async function POST(request: Request, { params }: Params) {
   const payload = parsedBody.data;
 
   const cropRect = payload.cropRect;
-  const mode = payload.mode === "x4" ? "x4" : "single";
+  const rawMode = payload.mode ?? "single";
+  const mode: CardMode = rawMode === "single" ? "single" : rawMode;
+  const expectedCount = MODE_RECT_COUNT[mode];
+  const isMultiCard = mode !== "single";
 
-  if (mode === "x4") {
+  if (isMultiCard) {
     const explicitRects = Array.isArray(payload.cropRects)
-      ? payload.cropRects.slice(0, 4)
+      ? payload.cropRects.slice(0, expectedCount)
       : [];
 
     const base = cropRect ?? { x: 0, y: 0, width: 1, height: 1 };
-    const quadrants = explicitRects.length === 4 ? explicitRects : splitIntoX4CropRects(base);
+    const quadrants = explicitRects.length === expectedCount ? explicitRects : splitForMode(mode, base);
     const baseName = card.name?.trim() ? card.name.trim() : null;
 
     const results = await Promise.all(

@@ -125,7 +125,7 @@ export function CardsGrid({
             )}
           >
             {cards.map((card) => (
-              <li key={card.id}>
+              <li key={card.id} id={`card-${card.id}`}>
                 <CardTile
                   card={card}
                   isWinner={matchingCardIds.has(card.id)}

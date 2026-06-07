@@ -6,13 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardBody } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/cn";
+import type { OneAwayCandidate } from "@/hooks/use-figure-engine";
 
 export interface MarkNumberFormProps {
   onMark: (number: number) => Promise<{ updatedCount: number }>;
+  oneAwayCandidates?: OneAwayCandidate[];
+  onScrollToCard?: (cardId: string) => void;
   disabled?: boolean;
 }
 
-export function MarkNumberForm({ onMark, disabled }: MarkNumberFormProps) {
+export function MarkNumberForm({ onMark, oneAwayCandidates = [], onScrollToCard, disabled }: MarkNumberFormProps) {
   const { toast } = useToast();
   const [value, setValue] = React.useState("");
   const [isPending, startTransition] = React.useTransition();
@@ -49,6 +53,16 @@ export function MarkNumberForm({ onMark, disabled }: MarkNumberFormProps) {
     });
   }
 
+  const candidatesByCard = React.useMemo(() => {
+    const map = new Map<string, OneAwayCandidate[]>();
+    for (const candidate of oneAwayCandidates) {
+      const list = map.get(candidate.cardId) ?? [];
+      list.push(candidate);
+      map.set(candidate.cardId, list);
+    }
+    return map;
+  }, [oneAwayCandidates]);
+
   return (
     <Card>
       <CardHeader>
@@ -64,7 +78,7 @@ export function MarkNumberForm({ onMark, disabled }: MarkNumberFormProps) {
           </div>
         </div>
       </CardHeader>
-      <CardBody>
+      <CardBody className="space-y-4">
         <form onSubmit={onSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-1.5">
             <Label htmlFor="mark-number" className="sr-only">
@@ -93,6 +107,36 @@ export function MarkNumberForm({ onMark, disabled }: MarkNumberFormProps) {
             {isPending ? "Marcando..." : "Marcar en todos"}
           </Button>
         </form>
+
+        {candidatesByCard.size > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[var(--color-fg)]">
+              Números que te hacen ganar:
+            </p>
+            <ul className="space-y-1.5">
+              {Array.from(candidatesByCard.entries()).map(([cardId, candidates]) => {
+                const cardName = candidates[0].cardName ?? `Cartón ${cardId.slice(0, 8)}`;
+                return candidates.map((candidate, idx) => (
+                  <li key={`${cardId}-${candidate.patternKey}-${idx}`}>
+                    <button
+                      type="button"
+                      onClick={() => onScrollToCard?.(cardId)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-surface-3)]",
+                      )}
+                    >
+                      <span className="flex-1">
+                        Con el <span className="font-bold text-[var(--color-brand-600)]">{candidate.missingNumber}</span> ganas con <span className="font-semibold">{cardName}</span>
+                        {candidate.patternKey !== "full" ? ` (${candidate.patternLabel})` : " (cartón lleno)"}
+                      </span>
+                      <ArrowRightIcon className="h-4 w-4 shrink-0 text-[var(--color-fg-muted)]" />
+                    </button>
+                  </li>
+                ));
+              })}
+            </ul>
+          </div>
+        ) : null}
       </CardBody>
     </Card>
   );
@@ -106,6 +150,20 @@ function HashIcon({ className }: { className?: string }) {
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ArrowRightIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path
+        d="M7 4l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
