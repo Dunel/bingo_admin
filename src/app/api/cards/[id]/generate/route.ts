@@ -15,60 +15,36 @@ type Params = {
 
 function splitIntoX2CropRects(base: OcrCropRect): OcrCropRect[] {
   const halfWidth = base.width / 2;
-  const insetX = Math.min(base.width * 0.008, halfWidth * 0.08);
-  const insetY = Math.min(base.height * 0.008, base.height * 0.08);
-
-  const leftX = base.x + insetX;
-  const rightX = base.x + halfWidth + insetX;
-  const topY = base.y + insetY;
-  const cellWidth = Math.max(halfWidth - insetX * 2, 0.02);
-  const cellHeight = Math.max(base.height - insetY * 2, 0.02);
 
   return [
-    { x: leftX, y: topY, width: cellWidth, height: cellHeight },
-    { x: rightX, y: topY, width: cellWidth, height: cellHeight },
+    { x: base.x, y: base.y, width: halfWidth, height: base.height },
+    { x: base.x + halfWidth, y: base.y, width: halfWidth, height: base.height },
   ];
 }
 
 function splitIntoX4CropRects(base: OcrCropRect): OcrCropRect[] {
   const halfWidth = base.width / 2;
   const halfHeight = base.height / 2;
-  const insetX = Math.min(base.width * 0.008, halfWidth * 0.08);
-  const insetY = Math.min(base.height * 0.008, halfHeight * 0.08);
-
-  const leftX = base.x + insetX;
-  const rightX = base.x + halfWidth + insetX;
-  const topY = base.y + insetY;
-  const bottomY = base.y + halfHeight + insetY;
-  const quadWidth = Math.max(halfWidth - insetX * 2, 0.02);
-  const quadHeight = Math.max(halfHeight - insetY * 2, 0.02);
 
   return [
-    { x: leftX, y: topY, width: quadWidth, height: quadHeight },
-    { x: rightX, y: topY, width: quadWidth, height: quadHeight },
-    { x: leftX, y: bottomY, width: quadWidth, height: quadHeight },
-    { x: rightX, y: bottomY, width: quadWidth, height: quadHeight },
+    { x: base.x, y: base.y, width: halfWidth, height: halfHeight },
+    { x: base.x + halfWidth, y: base.y, width: halfWidth, height: halfHeight },
+    { x: base.x, y: base.y + halfHeight, width: halfWidth, height: halfHeight },
+    { x: base.x + halfWidth, y: base.y + halfHeight, width: halfWidth, height: halfHeight },
   ];
 }
 
 function splitIntoX6CropRects(base: OcrCropRect): OcrCropRect[] {
   const thirdWidth = base.width / 3;
   const halfHeight = base.height / 2;
-  const insetX = Math.min(base.width * 0.008, thirdWidth * 0.08);
-  const insetY = Math.min(base.height * 0.008, halfHeight * 0.08);
-
-  const colX = (col: number) => base.x + thirdWidth * col + insetX;
-  const rowY = (row: number) => base.y + halfHeight * row + insetY;
-  const cellWidth = Math.max(thirdWidth - insetX * 2, 0.02);
-  const cellHeight = Math.max(halfHeight - insetY * 2, 0.02);
 
   return [
-    { x: colX(0), y: rowY(0), width: cellWidth, height: cellHeight },
-    { x: colX(1), y: rowY(0), width: cellWidth, height: cellHeight },
-    { x: colX(2), y: rowY(0), width: cellWidth, height: cellHeight },
-    { x: colX(0), y: rowY(1), width: cellWidth, height: cellHeight },
-    { x: colX(1), y: rowY(1), width: cellWidth, height: cellHeight },
-    { x: colX(2), y: rowY(1), width: cellWidth, height: cellHeight },
+    { x: base.x, y: base.y, width: thirdWidth, height: halfHeight },
+    { x: base.x + thirdWidth, y: base.y, width: thirdWidth, height: halfHeight },
+    { x: base.x + thirdWidth * 2, y: base.y, width: thirdWidth, height: halfHeight },
+    { x: base.x, y: base.y + halfHeight, width: thirdWidth, height: halfHeight },
+    { x: base.x + thirdWidth, y: base.y + halfHeight, width: thirdWidth, height: halfHeight },
+    { x: base.x + thirdWidth * 2, y: base.y + halfHeight, width: thirdWidth, height: halfHeight },
   ];
 }
 
