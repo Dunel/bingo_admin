@@ -872,9 +872,10 @@ async function recognizeCellValue(
       const candidates = extractCellCandidates(text);
       for (const candidate of candidates) {
         const inRange = candidate.value >= expectedRange[0] && candidate.value <= expectedRange[1];
-        const rangeBias = inRange ? 2.0 : -2.5;
+        // Scoring más simple: bonus fuerte para in-range, penalty leve para out-of-range
+        const rangeBias = inRange ? 3.0 : -1.0;
         const twoDigitBias = candidate.value >= 10 ? 0.2 : -0.2;
-        const confidenceBias = tesseractConfidence > 70 ? 0.5 : tesseractConfidence > 50 ? 0.2 : -0.3;
+        const confidenceBias = tesseractConfidence > 70 ? 0.5 : tesseractConfidence > 50 ? 0.2 : tesseractConfidence > 30 ? 0 : -0.2;
 
         const current = scores.get(candidate.value) ?? { score: 0, hits: 0, totalConfidence: 0, maxConfidence: 0 };
         current.score += variant.weight + candidate.bonus + rangeBias + twoDigitBias + confidenceBias;
@@ -910,14 +911,16 @@ async function recognizeCellValue(
     }
   }
 
-  // Requiere al menos 2 hits con confianza promedio > 40%
-  if (bestValue !== null && bestHits >= 2 && bestAvgConfidence > 40) {
-    return { value: bestValue, confidence: bestAvgConfidence };
-  }
-
-  // Fallback: si solo hay 1 hit pero con alta confianza, aceptarlo
-  if (bestValue !== null && bestHits === 1 && bestMaxConfidence > 70) {
-    return { value: bestValue, confidence: bestMaxConfidence };
+  // Umbral permisivo: aceptar mejor candidato si está en rango de la columna
+  if (bestValue !== null) {
+    const [min, max] = expectedRange;
+    if (bestValue >= min && bestValue <= max) {
+      return { value: bestValue, confidence: bestHits > 0 ? bestAvgConfidence : bestMaxConfidence };
+    }
+    // Fallback: aceptar si al menos 1 hit con confianza razonable (>20%)
+    if (bestHits >= 1 && bestMaxConfidence > 20) {
+      return { value: bestValue, confidence: bestMaxConfidence };
+    }
   }
 
   return null;
@@ -929,25 +932,37 @@ async function generateAdaptiveVariants(
 ): Promise<Array<{ buffer: Buffer; psm: string; weight: number }>> {
   const variants: Array<{ buffer: Buffer; psm: string; weight: number }> = [];
 
-  // cellBuffer ya está en 200x200 con fit: fill, solo aplicar filtros
+  // cellBuffer ya está preprocesado, solo aplicar filtros adicionales
 
-  // Variante 1: Original con PSM 7 (single line)
-  variants.push({ buffer: cellBuffer, psm: "7", weight: 1.0 });
+  // PSM 10 = single character mode (ideal para 1-2 dígitos en una celda)
+  variants.push({ buffer: cellBuffer, psm: "10", weight: 1.0 });
 
-  // Variante 2: Original con PSM 8 (single word)
-  variants.push({ buffer: cellBuffer, psm: "8", weight: 0.95 });
+  // PSM 7 = single line (texto en una línea)
+  variants.push({ buffer: cellBuffer, psm: "7", weight: 0.9 });
 
-  // Variante 3: Threshold bajo (para números claros sobre fondo oscuro)
-  variants.push({ buffer: await sharp(cellBuffer).threshold(120).toBuffer(), psm: "7", weight: 0.85 });
+  // PSM 8 = single word
+  variants.push({ buffer: cellBuffer, psm: "8", weight: 0.85 });
 
-  // Variante 4: Threshold alto (para números oscuros sobre fondo claro)
-  variants.push({ buffer: await sharp(cellBuffer).threshold(180).toBuffer(), psm: "7", weight: 0.85 });
+  // PSM 6 = uniform block of text
+  variants.push({ buffer: cellBuffer, psm: "6", weight: 0.8 });
 
-  // Variante 5: Negativo (para fondos oscuros)
-  variants.push({ buffer: await sharp(cellBuffer).negate().threshold(140).toBuffer(), psm: "7", weight: 0.75 });
+  // PSM 13 = raw line (sin segmentación)
+  variants.push({ buffer: cellBuffer, psm: "13", weight: 0.75 });
 
-  // Variante 6: Sharpen fuerte
-  variants.push({ buffer: await sharp(cellBuffer).sharpen({ sigma: 2 }).toBuffer(), psm: "7", weight: 0.7 });
+  // Threshold bajo (para números claros sobre fondo oscuro)
+  variants.push({ buffer: await sharp(cellBuffer).threshold(120).toBuffer(), psm: "10", weight: 0.7 });
+
+  // Threshold alto (para números oscuros sobre fondo claro)
+  variants.push({ buffer: await sharp(cellBuffer).threshold(180).toBuffer(), psm: "10", weight: 0.7 });
+
+  // Negativo (para fondos oscuros)
+  variants.push({ buffer: await sharp(cellBuffer).negate().threshold(140).toBuffer(), psm: "10", weight: 0.65 });
+
+  // Sharpen fuerte
+  variants.push({ buffer: await sharp(cellBuffer).sharpen({ sigma: 2 }).toBuffer(), psm: "10", weight: 0.6 });
+
+  // Median + threshold (para ruido)
+  variants.push({ buffer: await sharp(cellBuffer).median(3).threshold(150).toBuffer(), psm: "10", weight: 0.55 });
 
   return variants;
 }
@@ -1014,36 +1029,43 @@ async function extractGridByCells(
       const safeWidth = Math.max(1, cell.width);
       const safeHeight = Math.max(1, cell.height);
 
-      // Padding mínimo: solo 3% para evitar bordes de la celda
-      const padX = Math.max(1, Math.floor(safeWidth * 0.03));
-      const padY = Math.max(1, Math.floor(safeHeight * 0.03));
+      // Probar múltiples niveles de padding: 3%, 8%, 0%
+      const paddingLevels = [0.03, 0.08, 0.0];
+      let value: { value: number; confidence: number } | null = null;
 
-      const innerLeft = Math.min(width - 1, cell.left + padX);
-      const innerTop = Math.min(height - 1, cell.top + padY);
-      const innerWidth = Math.max(10, Math.min(width - innerLeft, safeWidth - padX * 2));
-      const innerHeight = Math.max(10, Math.min(height - innerTop, safeHeight - padY * 2));
+      for (const padRatio of paddingLevels) {
+        const padX = Math.max(1, Math.floor(safeWidth * padRatio));
+        const padY = Math.max(1, Math.floor(safeHeight * padRatio));
 
-      // Extraer celda y redimensionar a 200x200 con fill (estirar para llenar)
-      const cellBuffer = await sharp(source)
-        .extract({
-          left: innerLeft,
-          top: innerTop,
-          width: innerWidth,
-          height: innerHeight,
-        })
-        .grayscale()
-        .normalize()
-        .sharpen({ sigma: 1.5 })
-        .resize({ width: 200, height: 200, fit: "fill" })
-        .toBuffer();
+        const innerLeft = Math.min(width - 1, cell.left + padX);
+        const innerTop = Math.min(height - 1, cell.top + padY);
+        const innerWidth = Math.max(10, Math.min(width - innerLeft, safeWidth - padX * 2));
+        const innerHeight = Math.max(10, Math.min(height - innerTop, safeHeight - padY * 2));
 
-      const result = await recognizeCellValue(worker, cellBuffer, expectedRange);
-      if (result) {
-        console.log(`[OCR] Cell [${row},${col}]: detected ${result.value} (confidence: ${result.confidence.toFixed(1)}%)`);
+        // Extraer celda y redimensionar a 300x300 con fit: contain (mantiene proporción)
+        const cellBuffer = await sharp(source)
+          .extract({
+            left: innerLeft,
+            top: innerTop,
+            width: innerWidth,
+            height: innerHeight,
+          })
+          .grayscale()
+          .normalize()
+          .sharpen({ sigma: 1.5 })
+          .resize({ width: 300, height: 300, fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 1 } })
+          .toBuffer();
+
+        value = await recognizeCellValue(worker, cellBuffer, expectedRange);
+        if (value !== null) break;
+      }
+
+      if (value) {
+        console.log(`[OCR] Cell [${row},${col}]: detected ${value.value} (confidence: ${value.confidence.toFixed(1)}%)`);
       } else {
         console.log(`[OCR] Cell [${row},${col}]: no number detected (range: ${expectedRange[0]}-${expectedRange[1]})`);
       }
-      grid[row][col] = result?.value ?? null;
+      grid[row][col] = value?.value ?? null;
     }
   }
 
