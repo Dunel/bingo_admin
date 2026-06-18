@@ -361,13 +361,13 @@ export default function NewCardPage() {
                   ref={containerRef}
                   className="relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2"
                 >
-                  <div className="relative inline-block w-full">
+                  <div className="relative inline-block">
                     <img
                       src={previewUrl}
                       alt="Vista previa"
                       draggable={false}
                       onDragStart={(event) => event.preventDefault()}
-                      className="block max-h-[420px] w-auto max-w-full mx-auto"
+                      className="block max-h-[420px] w-auto max-w-full"
                     />
                     <div
                       ref={overlayRef}

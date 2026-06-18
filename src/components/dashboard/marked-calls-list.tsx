@@ -115,14 +115,14 @@ export function MarkedCallsList({ markedCalls, onDelete }: MarkedCallsListProps)
                   className={cn(
                     "group inline-flex items-center gap-1.5 rounded-full border px-1.5 py-1 text-sm font-semibold transition-all",
                     isSelected
-                      ? "border-[var(--color-fg)] bg-[var(--color-fg)] text-[var(--color-fg-inverse)] shadow-sm"
-                      : "border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-fg)] hover:border-[var(--color-border-focus)] hover:bg-[var(--color-surface)]",
+                      ? "border-[var(--color-brand-700)] bg-[var(--color-brand-700)] text-white shadow-sm"
+                      : "border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-fg)] hover:border-[var(--color-brand-400)] hover:bg-[var(--color-brand-50)]",
                   )}
                 >
                   <label className="flex cursor-pointer items-center gap-1.5 pl-2 pr-1">
                     <input
                       type="checkbox"
-                      className="h-3.5 w-3.5 cursor-pointer accent-[var(--color-fg)]"
+                      className="h-3.5 w-3.5 cursor-pointer accent-[var(--color-brand-700)]"
                       checked={isSelected}
                       onChange={() => toggleOne(value)}
                       aria-label={`Seleccionar número ${value}`}

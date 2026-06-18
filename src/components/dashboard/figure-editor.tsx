@@ -106,10 +106,10 @@ export function FigureEditor({
                         "flex h-9 w-9 items-center justify-center rounded text-xs font-bold transition-all duration-150",
                         "hover:scale-105 active:scale-95",
                         isCenter
-                          ? "border border-[var(--color-fg)] bg-[var(--color-fg)] text-[var(--color-fg-inverse)]"
+                          ? "border border-[var(--color-brand-400)] bg-[var(--color-brand-200)] text-[var(--color-brand-700)] dark:bg-[var(--color-brand-800)] dark:text-[var(--color-brand-200)]"
                           : isSelected
-                            ? "bg-[var(--color-brand-500)] text-white shadow-sm"
-                            : "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg-subtle)] hover:border-[var(--color-border-focus)]",
+                            ? "bg-[var(--color-brand-600)] text-white shadow-sm"
+                            : "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg-subtle)] hover:border-[var(--color-brand-400)]",
                       )}
                     >
                       {isCenter ? "F" : isSelected ? "X" : "·"}
@@ -150,7 +150,7 @@ export function FigureEditor({
                         className={cn(
                           "inline-flex items-center gap-2 rounded-[var(--radius-md)] border px-2 py-1.5 text-xs font-semibold transition-all",
                           selected
-                            ? "border-[var(--color-brand-500)] bg-[var(--color-brand-50)] text-[var(--color-brand-700)] dark:bg-[var(--color-brand-900)]/30 dark:text-[var(--color-brand-200)]"
+                            ? "border-[var(--color-brand-600)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] dark:bg-[var(--color-brand-800)] dark:text-[var(--color-brand-200)]"
                             : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg)]",
                         )}
                       >

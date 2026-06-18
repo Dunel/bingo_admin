@@ -67,7 +67,7 @@ export function MarkNumberForm({ onMark, oneAwayCandidates = [], onScrollToCard,
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-50)] text-[var(--color-brand-600)] dark:bg-[var(--color-brand-900)]/40 dark:text-[var(--color-brand-200)]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-brand-100)] text-[var(--color-brand-700)] dark:bg-[var(--color-brand-800)] dark:text-[var(--color-brand-200)]">
             <HashIcon className="h-4 w-4" />
           </div>
           <div>
@@ -126,7 +126,7 @@ export function MarkNumberForm({ onMark, oneAwayCandidates = [], onScrollToCard,
                       )}
                     >
                       <span className="flex-1">
-                        Con el <span className="font-bold text-[var(--color-brand-600)]">{candidate.missingNumber}</span> ganas con <span className="font-semibold">{cardName}</span>
+                        Con el <span className="font-bold text-[var(--color-brand-700)]">{candidate.missingNumber}</span> ganas con <span className="font-semibold">{cardName}</span>
                         {candidate.patternKey !== "full" ? ` (${candidate.patternLabel})` : " (cartón lleno)"}
                       </span>
                       <ArrowRightIcon className="h-4 w-4 shrink-0 text-[var(--color-fg-muted)]" />

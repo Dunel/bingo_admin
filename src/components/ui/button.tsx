@@ -7,15 +7,15 @@ type ButtonSize = "sm" | "md" | "lg";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--color-fg)] text-[var(--color-fg-inverse)] hover:opacity-90 active:opacity-80 shadow-sm",
+    "bg-[var(--color-brand-700)] text-white hover:bg-[var(--color-brand-800)] active:bg-[var(--color-brand-900)] shadow-sm",
   secondary:
-    "bg-[var(--color-surface-2)] text-[var(--color-fg)] hover:bg-[var(--color-surface-3)] border border-[var(--color-border)]",
+    "bg-[var(--color-brand-100)] text-[var(--color-brand-700)] hover:bg-[var(--color-brand-200)] border border-[var(--color-brand-200)]",
   outline:
-    "bg-transparent text-[var(--color-fg)] border border-[var(--color-border-strong)] hover:bg-[var(--color-surface-2)]",
+    "bg-transparent text-[var(--color-fg)] border border-[var(--color-border-strong)] hover:bg-[var(--color-brand-50)] hover:border-[var(--color-brand-400)]",
   ghost:
-    "bg-transparent text-[var(--color-fg)] hover:bg-[var(--color-surface-2)]",
+    "bg-transparent text-[var(--color-fg)] hover:bg-[var(--color-brand-100)]",
   danger:
-    "bg-[var(--color-danger)] text-white hover:opacity-90 active:opacity-80 shadow-sm",
+    "bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger)]/90 active:opacity-80 shadow-sm",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

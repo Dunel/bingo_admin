@@ -38,7 +38,7 @@ export function DashboardHeader({
   return (
     <header
       className={cn(
-        "relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-gradient-to-br from-[var(--color-fg)] to-[color-mix(in_oklab,var(--color-fg)_85%,var(--color-brand-700))] p-6 text-[var(--color-fg-inverse)] shadow-[var(--shadow-md)]",
+        "relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--color-brand-300)] bg-gradient-to-br from-[var(--color-brand-700)] to-[var(--color-brand-900)] p-6 text-white shadow-[var(--shadow-md)]",
         className,
       )}
     >
@@ -58,7 +58,7 @@ export function DashboardHeader({
           <h1 className="mt-1.5 text-2xl font-black tracking-tight">
             Hola, {username ?? email.split("@")[0]}
           </h1>
-          <p className="mt-1 text-sm text-[var(--color-fg-inverse)]/70">
+          <p className="mt-1 text-sm text-white/70">
             {cardsCount === 0
               ? "Aún no tienes cartones registrados"
               : `${cardsCount} cartón${cardsCount === 1 ? "" : "es"} registrado${cardsCount === 1 ? "" : "s"}`}
@@ -86,7 +86,7 @@ export function DashboardHeader({
             onClick={onLogout}
             loading={loggingOut}
             leftIcon={<LogoutIcon className="h-4 w-4" />}
-            className="border-[var(--color-fg-inverse)]/20 bg-[var(--color-fg-inverse)]/5 text-[var(--color-fg-inverse)] hover:bg-[var(--color-fg-inverse)]/10"
+            className="border-white/30 bg-white/10 text-white hover:bg-white/20"
           >
             Salir
           </Button>

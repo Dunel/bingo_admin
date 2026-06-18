@@ -25,7 +25,7 @@ function CellThumbImpl({ card, rowIndex, colIndex, isFigureCell, figureFilterAct
       className={cn(
         "relative flex h-6 w-6 items-center justify-center rounded text-[10px] font-semibold transition-colors",
         isCenterFree
-          ? "border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-fg-muted)]"
+          ? "border border-[var(--color-brand-300)] bg-[var(--color-brand-100)] text-[var(--color-brand-600)] dark:bg-[var(--color-brand-800)] dark:text-[var(--color-brand-300)]"
           : isHighlightedWinner
             ? "border-2 border-[var(--color-bingo-winner)] bg-[var(--color-bingo-marked-bg)] text-[var(--color-bingo-winner-fg)] font-black shadow-[0_0_8px_var(--color-bingo-winner-ring)]"
             : figureFilterActive && !isFigureCell
