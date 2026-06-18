@@ -911,14 +911,28 @@ async function recognizeCellValue(
     }
   }
 
-  // Umbral permisivo: aceptar mejor candidato si está en rango de la columna
+  // Umbral con tasa de 30% de errores (confianza >= 70%) pero requiriendo más hits
   if (bestValue !== null) {
     const [min, max] = expectedRange;
-    if (bestValue >= min && bestValue <= max) {
-      return { value: bestValue, confidence: bestHits > 0 ? bestAvgConfidence : bestMaxConfidence };
+    const inRange = bestValue >= min && bestValue <= max;
+
+    // Primario: 3+ hits con confianza promedio >= 70% (30% error) y en rango
+    if (inRange && bestHits >= 3 && bestAvgConfidence >= 70) {
+      return { value: bestValue, confidence: bestAvgConfidence };
     }
-    // Fallback: aceptar si al menos 1 hit con confianza razonable (>20%)
-    if (bestHits >= 1 && bestMaxConfidence > 20) {
+
+    // Secundario: 2+ hits con confianza máxima >= 80% y en rango
+    if (inRange && bestHits >= 2 && bestMaxConfidence >= 80) {
+      return { value: bestValue, confidence: bestMaxConfidence };
+    }
+
+    // Terciario: 2+ hits con confianza promedio >= 60% y en rango
+    if (inRange && bestHits >= 2 && bestAvgConfidence >= 60) {
+      return { value: bestValue, confidence: bestAvgConfidence };
+    }
+
+    // Fallback: 1 hit con confianza máxima >= 85% y en rango
+    if (inRange && bestHits >= 1 && bestMaxConfidence >= 85) {
       return { value: bestValue, confidence: bestMaxConfidence };
     }
   }
